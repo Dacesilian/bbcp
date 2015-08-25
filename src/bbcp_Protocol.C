@@ -155,7 +155,8 @@ int bbcp_Protocol::Schedule(bbcp_Node *Fnode, bbcp_FileSpec *Ffs,
 
 // Compute callback hostname and reset callback port
 //
-        if (!(Ffs->hostname)) cbhost = bbcp_Config.MyAddr;
+   if (bbcp_Config.CBhost) cbhost =  bbcp_Config.CBhost;
+   else if (!(Ffs->hostname)) cbhost = bbcp_Config.MyAddr;
    else if ((bbcp_Config.Options & bbcp_NODNS && isdigit(Ffs->hostname[0]))
            ||  Ffs->hostname[0] == '[') cbhost = Ffs->hostname;
    else fcbh = (cbhost = bbcp_Net.FullHostName(Ffs->hostname,1)) !=0;
