@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                            b b c p _ A 3 2 . h                             */
 /*                                                                            */
-/*(c) 2010-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -50,13 +51,23 @@ class bbcp_A32_zlib : public bbcp_ChkSum
     
     int   csSize() {return sizeof(adler);}
 
+    char *csCurr(char **Text=0) {
+        curradler = finish(Text);
+        return (char *)&curradler;
+    }
+
     char *Final(char **Text=0) {
-       
-#ifndef BBCP_BIG_ENDIAN
-        adler = htonl(adler);
-#endif
-        if (Text) *Text = x2a((char *)&adler);
+        adler = finish(Text);
         return (char *)&adler;
+    }
+
+    uLong finish(char **Text) {
+        uLong the_adler = adler;
+#ifndef BBCP_BIG_ENDIAN
+        the_adler = htonl(the_adler);
+#endif
+        if (Text) *Text = x2a((char *)&the_adler);
+        return the_adler;
     }
 
     const char *Type() {return "a32";}
@@ -66,6 +77,7 @@ class bbcp_A32_zlib : public bbcp_ChkSum
 
  private:
     uLong adler;
-    
+    uLong curradler;
+
 };
 #endif

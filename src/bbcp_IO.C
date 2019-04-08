@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                             b b c p _ I O . C                              */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -69,25 +70,27 @@ void bbcp_IO::Log(const char *rk, const char *wk)
    if (RKeyZ) free(RKeyZ);
 
    if (rk)
-      if (strlen(rk) > 16)
+     {if (strlen(rk) > 16)
          {sprintf(buff, "START_%16s_READ", rk); RKeyA = strdup(buff);
           sprintf(buff,   "END_%16s_READ", rk); RKeyZ = strdup(buff);
          } else {
           sprintf(buff, "START_%s_READ", rk); RKeyA = strdup(buff);
           sprintf(buff,   "END_%s_READ", rk); RKeyZ = strdup(buff);
          }
+      }
 
    if (WKeyA) free(WKeyA);
    if (WKeyZ) free(WKeyZ);
 
    if (wk)
-      if (strlen(wk) > 16)
+     {if (strlen(wk) > 16)
          {sprintf(buff, "START_%16s_WRITE", wk); WKeyA = strdup(buff);
           sprintf(buff,   "END_%16s_WRITE", wk); WKeyZ = strdup(buff);
          } else {
           sprintf(buff, "START_%s_WRITE", wk); WKeyA = strdup(buff);
           sprintf(buff,   "END_%s_WRITE", wk); WKeyZ = strdup(buff);
          }
+     }
 }
 
 /******************************************************************************/

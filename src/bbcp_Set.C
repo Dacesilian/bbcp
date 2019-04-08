@@ -1,12 +1,9 @@
-#ifndef __BBCP_IO_PIPE_H__
-#define __BBCP_IO_PIPE_H__
 /******************************************************************************/
 /*                                                                            */
-/*                          b b c p _ I O _ P i p e                           */
+/*                            b b c p _ S e t . C                             */
 /*                                                                            */
-/*(c) 2011-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
 /*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
-/*                            All Rights Reserved                             */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -29,28 +26,70 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
 
-#include "bbcp_IO.h"
-  
-class bbcp_IO_Pipe : public virtual bbcp_IO
+#include "bbcp_C32.h"
+#include "bbcp_Set.h"
+
+/******************************************************************************/
+/*                         L o c a l   O b j e c t s                          */
+/******************************************************************************/
+
+namespace
 {
-public:
-        int     Close();
-
-        int     Seek(long long offv) {return 0;}
-
-        ssize_t Write(char *buff, size_t wrsz)
-                     {return bbcp_IO::Write(buff, wrsz);}
-
-        ssize_t Write(char *buff, size_t wrsz, off_t offs)
-                     {return bbcp_IO::Write(buff, wrsz);}
-
-        ssize_t Write(const struct iovec *iovp, int iovn)
-                     {return bbcp_IO::Write(iovp, iovn);}
-
-             bbcp_IO_Pipe(int fd, pid_t pnum=0) : bbcp_IO(fd), thePid(pnum) {}
-            ~bbcp_IO_Pipe() {}
-
-private:
-pid_t thePid;
+bbcp_C32 kHash;
 };
-#endif
+  
+/******************************************************************************/
+/*                           C o n s t r u c t o r                            */
+/******************************************************************************/
+  
+bbcp_Set::bbcp_Set(int slots)
+{
+   int n = slots * sizeof(SetItem *);
+
+// Allocate the table
+//
+   Slots = slots;
+   SetTab = (SetItem **)malloc(n);
+   memset(SetTab, 0, n);
+}
+
+/******************************************************************************/
+/*                            D e s t r u c t o r                             */
+/******************************************************************************/
+  
+bbcp_Set::~bbcp_Set()
+{
+   SetItem *sP, *dP;
+
+   for (int i = 0; i < Slots; i++)
+       {if ((sP = SetTab[i]))
+           do {dP = sP; sP = sP->next; delete dP;} while(sP);
+       }
+   free(SetTab);
+}
+
+/******************************************************************************/
+/*                                   A d d                                    */
+/******************************************************************************/
+  
+bool bbcp_Set::Add(const char *key)
+{
+   SetItem *sP;
+   unsigned int hVal, kEnt;
+
+// Get the hash for the key
+//
+   hVal = *(unsigned int *)kHash.Calc(key, strlen(key));
+   kEnt = hVal % Slots;
+
+// Find the entry
+//
+   if ((sP = SetTab[kEnt]))
+      do {if (!strcmp(key, sP->key)) return false;} while((sP = sP->next));
+
+// Add the item
+//
+   sP = new SetItem(key, SetTab[kEnt]);
+   SetTab[kEnt] = sP;
+   return true;
+}

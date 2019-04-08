@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                         b b c p _ C o n f i g . h                          */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*               DE-AC02-76-SFO0515 with the Deprtment of Energy              */
 /*                                                                            */
@@ -39,6 +40,7 @@ class bbcp_Config
 public:
 
 long long     Options;
+long long     Option2;
 int           bindtries;
 int           bindwait;
 int           Mode;
@@ -109,6 +111,8 @@ int           csType;
 #define bbcp_csA32    1
 #define bbcp_csC32    2
 #define bbcp_csMD5    3
+#define bbcp_csC32Z   4
+#define bbcp_csC32C   5
 
 int           csFD;
 char         *csPath;
@@ -125,8 +129,8 @@ bbcp_FileSpec  *srcSpec;
 bbcp_FileSpec  *srcLast;
 bbcp_FileSpec  *snkSpec;
 
-const char *SrcArg;
-const char *SnkArg;
+char           *SrcArg;
+char           *SnkArg;
 
 void  Arguments(int argc, char **argv, int cfgfd=-1);
 int   ConfigInit(int argc, char **argv);
@@ -163,16 +167,18 @@ void  ParseSB(char *spec);
 int   ROpts(char *Opts);
 int   ROptsErr(char *Opts);
 char *Rtoken(void);
+void  setArgs(const char *aType, char *&aDst, char *aSrc);
 int   setIPV4(char *Opts);
 void  setOpts(bbcp_Args &Args);
 int   setPorts(char *pspec);
+bool  setSkip(char *skparg);
 char *tohex(char *inbuff, int inlen, char *outbuff);
 int   Unbuff(char *Opts);
 int   Unpipe(char *Opts);
 };
 
 /******************************************************************************/
-/*                   O p t i o n   D e f i n o i t i o n s                    */
+/*               O p t i o n s   B i t   D e f i n i t i o n s                */
 /******************************************************************************/
   
 #define bbcp_APPEND   0x0000000000000001LL
@@ -235,6 +241,27 @@ int   Unpipe(char *Opts);
 
 #define bbcp_IPV4     0x0000400000000000LL
 
+#define bbcp_AUTOMKD  0x0001000000000000LL
+#define bbcp_SLFOLLOW 0x0002000000000000LL
+#define bbcp_SLKEEP   0x0004000000000000LL
+
+#define bbcp_PTONLY   0x0010000000000000LL
+#define bbcp_RDONLY   0x0020000000000000LL
+//      bbcp_???      0x0040000000000000LL
+#define bbcp_RTTMP    0x0080000000000000LL
+
+/******************************************************************************/
+/*               O p t i o n 2   B i t   D e f i n i t i o n s                */
+/******************************************************************************/
+  
+#define bbcp2_SKPEDIR 0x0000000000000001LL
+#define bbcp2_SKPIERR 0x0000000000000002LL
+#define bbcp2_SKPOERR 0x0000000000000004LL
+
+/******************************************************************************/
+/*                           M i s c   V a l u e s                            */
+/******************************************************************************/
+  
 #define BBCP_MAXSTREAMS 64
 #define BBCP_MINPMONSEC  1
 

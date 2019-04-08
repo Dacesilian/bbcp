@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                       b b c p _ F i l e S p e c . h                        */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -50,9 +51,12 @@ char                 *targetfn;
 long long             targetsz;
 char                 *targsigf;
 int                   seqno;
+bool                  isEmpty;
 struct bbcp_FileInfo  Info;
 
 int              Compose(long long did, char *dpath, int dplen, char *fname);
+
+int              Create_Link();
 
 int              Create_Path();
 
@@ -60,7 +64,7 @@ int              Decode(char *buff, char *xName=0);
 
 int              Encode(char *buff, size_t blen);
 
-void             ExtendFileSpec(bbcp_FileSpec* headp, int &numF);
+bool             ExtendFileSpec(int &numF, int &numL, int slOpt);
 
 int              Finalize(int retc=0);
 
@@ -70,7 +74,9 @@ void             Parse(char *spec, int isPipe=0);
 
 int              setMode(mode_t Mode);
 
-int              setStat();
+int              setStat(mode_t Mode);
+
+void             setTrim();
 
 int              Stat(int complain=1);
 
@@ -82,19 +88,24 @@ int              Xfr_Done();
                   : next(0), username(uname), hostname(hname), pathname(0),
                     filename(0), filereqn(0), fileargs(0),
                     targpath(0), targetfn(0), targetsz(0), targsigf(0),
-                    fspec(0), fspec1(0), fspec2(0), FSp(fsp) {}
+                    isEmpty(false),
+                    fspec(0), fspec1(0), fspec2(0), slData(0), FSp(fsp) {}
     ~bbcp_FileSpec() {if (fspec)    free(fspec);
                       if (fspec1)   free(fspec1);
                       if (fspec2)   free(fspec2);
+                      if (slData)   free(slData);
                       if (targpath) free(targpath);
                       if (targsigf) free(targsigf);
                      }
 
 private:
+void             SkipMsg(bbcp_FileInfo &fInfo, const char *that);
 
+static int       trimDir;
 char            *fspec;
 char            *fspec1;
 char            *fspec2;
+char            *slData;
 bbcp_FileSystem *FSp;
 int              Xfr_Fixup();
 void             BuildPaths();

@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                        b b c p _ N e t w o r k . C                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -105,7 +106,8 @@ bbcp_Network::bbcp_Network()
    if ((netFD = open("/proc/sys/net/core/rmem_max", O_RDONLY)) > -1)
       {if (read(netFD, netBuff, sizeof(netBuff)) > 0)
           {maxRcvBuff = atoi(netBuff);
-           maxRcvBuff = maxRcvBuff*2/8192*8192;
+           if (!(maxRcvBuff & 0x40000000)) maxRcvBuff = maxRcvBuff<<1;
+           maxRcvBuff = maxRcvBuff/8192*8192;
           }
        close(netFD);
       }
@@ -115,7 +117,8 @@ bbcp_Network::bbcp_Network()
    if ((netFD = open("/proc/sys/net/core/wmem_max", O_RDONLY)) > -1)
       {if (read(netFD, netBuff, sizeof(netBuff)) > 0)
           {maxSndBuff = atoi(netBuff);
-           maxSndBuff = maxSndBuff*2/8192*8192;
+           if (!(maxSndBuff & 0x40000000)) maxSndBuff = maxSndBuff<<1;
+           maxSndBuff = maxSndBuff/8192*8192;
           }
        close(netFD);
       }
@@ -606,7 +609,7 @@ void bbcp_Network::setOpts(const char *who, int xfd)
    if (ATune || !(wbsz = Window)) wbsz = -1;
       else {if (Sender) wbsz = Window - (Window/5);
             if (setsockopt(xfd, SOL_SOCKET, WinSOP, &wbsz, szwb))
-               bbcp_Emsg(who,errno,"setting",(Sender?"sndbuf":"rcvbuf","size"));
+               bbcp_Emsg(who,errno,"setting",(Sender?"sndbuf":"rcvbuf"),"size");
            }
 
 // If debug is on, we verify that the window was set as we wanted

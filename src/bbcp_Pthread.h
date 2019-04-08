@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                        b b c p _ P t h r e a d . h                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -31,6 +32,8 @@
 #include <pthread.h>
 #include <time.h>
 #include <semaphore.h>
+
+#include <exception>
 
 class bbcp_CondVar
 {
@@ -155,7 +158,7 @@ inline void Wait() {int rc;
   bbcp_Semaphore(int semval=1) {if (sem_init(&h_semaphore, 0, semval))
                                    {throw "sem_init() failed", errno;}
                                }
- ~bbcp_Semaphore() {if (sem_destroy(&h_semaphore))
+ ~bbcp_Semaphore() throw(std::exception) {if (sem_destroy(&h_semaphore))
                        {throw "sem_destroy() failed", errno;}
                    }
 

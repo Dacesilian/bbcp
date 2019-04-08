@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                           b b c p _ A r g s . C                            */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -28,14 +29,11 @@
 #include <stdlib.h>
 #include <strings.h>
 #include "bbcp_Args.h"
-#include "bbcp_Config.h"
 #include "bbcp_Headers.h"
 
 /******************************************************************************/
 /*                        G l o b a l   O b j e c t s                         */
 /******************************************************************************/
-
-extern bbcp_Config bbcp_Config;
 
 /******************************************************************************/
 /*                         L o c a l   C l a s s e s                          */
@@ -56,7 +54,7 @@ char *operator%(char *optarg)
          bbcp_Opt *p = this;
          do if (i <= p->Optmaxl && i >= p->Optminl &&
                !strncmp(p->Optword, optarg, i)) return p->Optvalu;
-            while(p = p->Optnext);
+            while((p = p->Optnext));
          return 0;
         }
 
@@ -130,10 +128,17 @@ char *bbcp_Args::getarg(int newln)
 /******************************************************************************/
 /*                                g e t o p t                                 */
 /******************************************************************************/
+extern  const char    *bbcp_HostName;
   
 char bbcp_Args::getopt()
 {
-   char optval, optbuff[2] = {0,0}, *optspec, *arglist, *theOpt = optbuff;
+   char optval, *optspec, *arglist;
+
+// Do some required initialization
+//
+   optbuff[0] = 0;
+   optbuff[1] = 0;
+   theOpt = optbuff;
 
 // Check if we really have any more options
 //
@@ -145,6 +150,7 @@ char bbcp_Args::getopt()
       else if (inStream)
               {if (MOA) arglist = arg_stream.GetLine();
                   else  arglist = (char *)"";
+
                if (arglist && (curopt = arg_stream.GetToken(&arglist)))
                   {if (*curopt != '-') {arg_stream.RetToken(); curopt = 0;}
                       else curopt++;
@@ -164,14 +170,13 @@ char bbcp_Args::getopt()
 
 // Check for extended options or single letter option
 //
-        if (optp && strlen(curopt) > 2 && *curopt == '-'
-        && (optspec = *optp%(curopt+1)))
-           {theOpt = curopt; curopt = 0;
-            if (!(optspec = index(vopts, *optspec)))
+        if (optp && strlen(curopt) > 2 && *curopt == '-')
+           {if (!(optspec = *optp%(curopt+1))
+            ||  !(optspec = index(vopts, *optspec)))
                {cerr <<epfx <<"Invalid option, '-" <<theOpt <<"'." <<endl;
                 endopts = 1;
                 return '?';
-               }
+               } else {theOpt = curopt; curopt = 0;}
            }
    else if (!(optspec = index(vopts, *curopt))
         || *curopt == ':' || *curopt == '.')
@@ -187,21 +192,26 @@ char bbcp_Args::getopt()
 
 // Get the argument from whatever source we have
 //
-   if (inStream) argval = (MOA ? arglist : arg_stream.GetToken());
+   if (inStream)
+      {argval = (MOA ? arglist : arg_stream.GetToken());
+       curopt = 0;
+      }
       else argval = (Aloc < Argc ? Argv[Aloc++] : 0);
 
 // If we have a valid argument, then we are all done
 //
    if (argval)
-      if (!*argval) argval = 0;
-         else if (*argval != '-') return *optspec;
+     {if (!*argval) argval = 0;
+         else {if (*argval != '-') return *optspec;}
+     }
 
 // If argument is optional, let it go
 //
    if (optspec[1] == '.')
       {if (argval && *argval == '-')
-          if (inStream) arg_stream.RetToken();
-             else Aloc--;
+          {if (inStream) arg_stream.RetToken();
+              else Aloc--;
+          }
        argval = 0;
        return *optspec;
       }

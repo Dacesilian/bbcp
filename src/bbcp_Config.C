@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                         b b c p _ C o n f i g . C                          */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*               DE-AC02-76-SFO0515 with the Deprtment of Energy              */
 /*                                                                            */
@@ -60,6 +61,7 @@
 #include "bbcp_Emsg.h"
 #include "bbcp_Headers.h"
 #include "bbcp_NetLogger.h"
+#include "bbcp_NetAddr.h"
 #include "bbcp_Network.h"
 #include "bbcp_Platform.h"
 #include "bbcp_Stream.h"
@@ -83,7 +85,7 @@
 /*                        G l o b a l   O b j e c t s                         */
 /******************************************************************************/
 
-       bbcp_Config    bbcp_Config;
+       bbcp_Config    bbcp_Cfg;
 
        bbcp_Debug     bbcp_Debug;
 
@@ -110,6 +112,8 @@ namespace
 
 bbcp_Config::bbcp_Config()
 {
+   mode_t    uMask = umask(0);
+   umask(uMask);
    SrcBuff   = 0;
    SrcBase   = 0;
    SrcUser   = 0;
@@ -131,9 +135,10 @@ bbcp_Config::bbcp_Config()
    bindtries = 1;
    bindwait  = 0;
    Options   = 0;
-   Mode      = S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH;
+   Option2   = 0;
+   Mode      = (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH) & ~uMask;
    ModeD     = 0;
-   ModeDC    = Mode   |S_IXUSR|S_IXGRP|S_IXOTH;
+   ModeDC    = (Mode   |S_IXUSR|S_IXGRP|S_IXOTH) & ~uMask;
    BAdd      = 0;
    Bfact     = 0;
    BNum      = 0;
@@ -160,8 +165,8 @@ bbcp_Config::bbcp_Config()
    Wsize     = 131072;
    MaxWindow = 0;
    lastseqno = 0;
-   SrcArg    = "SRC";
-   SnkArg    = "SNK";
+   SrcArg    = strdup("SRC");
+   SnkArg    = strdup("SNK");
    CKPdir    = 0;
    IDfn      = 0;
    TimeLimit = 0;
@@ -229,7 +234,10 @@ bbcp_Config::~bbcp_Config()
 #define Cat_Oct(x) {            cbp=n2a(x,&cbp[0],"%o");}
 #define Add_Str(x) {cbp[0]=' '; strcpy(&cbp[1], x); cbp+=strlen(x)+1;}
 
-#define bbcp_VALIDOPTS (char *)"-a.B:b:C:c.d:DeE:fFhi:I:kKl:L:m:nN:oOpP:q:rR.s:S:t:T:u:U:vVw:W:x:y:zZ:4.$#"
+#define bbcp_VALIDOPT1 (char *)"-a.AB:b:C:c.d:DeE:fFghi:I:kKl:L:m:nN:oOp"
+#define bbcp_VALIDOPT2         "P:q:rR.s:S:t:T:u:U:vVw:W:x:y:zZ:4.~@:$#+"
+#define bbcp_VALIDOPT3         "^<>"
+#define bbcp_VALIDOPTS bbcp_VALIDOPT1 bbcp_VALIDOPT2 bbcp_VALIDOPT3
 #define bbcp_SSOPTIONS bbcp_VALIDOPTS "MH:Y:"
 
 #define Hmsg1(a)   {bbcp_Fmsg("Config", a);    help(1);}
@@ -244,11 +252,16 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
    int mspec = 0, isProg = 0;
    char *Slash, *inFN=0, c, cbhname[MAXHOSTNAMELEN+1];
    bbcp_Args arglist((char *)"bbcp: ");
+   bool warnIPV = false;
 
 // Make sure we have at least one argument
 //
    if (argc < 2) Hmsg1("Copy arguments not specified.");
    notctl = (Options & (bbcp_SRC | bbcp_SNK));
+
+//DEBUG
+// if (Options & bbcp_SRC) bbcp_HostName = "SRC";
+// if (Options & bbcp_SNK) bbcp_HostName = "SNK";
 
 // Establish valid options and the source of those options
 //
@@ -260,12 +273,14 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
 
 // Process the options
 //
-   while (c=arglist.getopt())
+   while ((c=arglist.getopt()))
      { switch(c)
        {
        case 'a': Options |= bbcp_APPEND | bbcp_ORDER;
                  if (CKPdir) {free(CKPdir); CKPdir = 0;}
                  if (arglist.argval) CKPdir = strdup(arglist.argval);
+                 break;
+       case 'A': Options |= bbcp_AUTOMKD;
                  break;
        case 'B': if (a2sz("block size", arglist.argval,
                          rwbsz, 1024, ((int)1)<<30))
@@ -293,6 +308,7 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
                     } else ParseSB(arglist.argval);
                  break;
        case 'D': Options |= bbcp_TRACE;
+                 chdir("/tmp"); // Where the core file goes
                  break;
        case 'e': csOpts  |= bbcp_csDashE|bbcp_csLink;
                  break;
@@ -302,6 +318,8 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
        case 'f': Options |= bbcp_FORCE;
                  break;
        case 'F': Options |= bbcp_NOSPCHK;
+                 break;
+       case 'g': // No longer needed so w ignore it for backward compatability
                  break;
        case 'h': help(0);
                  break;
@@ -363,14 +381,18 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
        case 's': if (a2n("streams", arglist.argval,
                          Streams,1,BBCP_MAXSTREAMS)) Cleanup(1, argv[0], cfgfd);
                  break;
-       case 'S': if (SrcXeq) free(SrcXeq);
-                 SrcXeq = strdup(arglist.argval);
+       case 'S': if (*arglist.argval != '+')
+                    {if (SrcXeq) free(SrcXeq);
+                     SrcXeq = strdup(arglist.argval);
+                    } else setArgs("SRC", SrcArg, arglist.argval+1);
                  break;
        case 't': if (a2sz("time limit", arglist.argval,
                          TimeLimit,1,((int)1)<<30)) Cleanup(1, argv[0], cfgfd);
                  break;
-       case 'T': if (SnkXeq) free(SnkXeq);
-                 SnkXeq = strdup(arglist.argval);
+       case 'T': if (*arglist.argval != '+')
+                    {if (SnkXeq) free(SnkXeq);
+                     SnkXeq = strdup(arglist.argval);
+                    } else setArgs("SNK", SnkArg, arglist.argval+1);
                  break;
        case 'v': Options |= bbcp_VERBOSE;
                  if (xTrace < 2) xTrace = 2;
@@ -410,13 +432,33 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
        case '4': if (notctl) Options |= bbcp_IPV4;
                     else if (setIPV4(arglist.argval)) Cleanup(1,argv[0],cfgfd);
                  break;
+       case '~': Options |=  (bbcp_PCOPY | bbcp_PTONLY);
+                 break;
+       case '@': Options &= ~(bbcp_SLFOLLOW | bbcp_SLKEEP);
+                      if (!strcmp("follow", arglist.argval))
+                         Options |= bbcp_SLFOLLOW;
+                 else if (!strcmp("keep",   arglist.argval))
+                         Options |= bbcp_SLKEEP;
+                 else if (!strcmp("ignore", arglist.argval)) {}
+                 else{bbcp_Fmsg("Config","Invalid symlink option -",arglist.argval);
+                      Cleanup(1, argv[0], cfgfd);
+                     }
+                 break;
        case '$': cout <<bbcp_License <<endl;
                  exit(0);
                  break;
        case '#': cout <<bbcp_Version.VData <<endl;
                  exit(0);
                  break;
+       case '+': Options |= bbcp_RDONLY;
+                 break;
        case '-': break;
+       case '=': Option2 |= bbcp2_SKPEDIR;
+                 break;
+       case '<': Option2 |= bbcp2_SKPIERR;
+                 break;
+       case '>': Option2 |= bbcp2_SKPOERR;
+                 break;
        default:  if (!notctl)
                     {if (cfgfd < 0) help(255);
                      Cleanup(1, argv[0], cfgfd);
@@ -431,6 +473,10 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
 // Set the correct ip stack to use (do this before any resolution)
 //
    if (Options & bbcp_IPV4) bbcp_Net.IPV4();
+      else if (bbcp_NetAddr::IPV4Set())
+              {Options |= bbcp_IPV4;
+               if (Options & bbcp_BLAB) warnIPV = true;
+              }
 
 // If we should use the DNS then get our real hostname
 //
@@ -465,6 +511,8 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
       {int isBad = 0;
        if (Options & bbcp_APPEND)
           isBad = bbcp_Fmsg("Config", "-N xx and -a are mutually exclusive.");
+       if (Options & bbcp_AUTOMKD)
+          isBad = bbcp_Fmsg("Config", "-N xx and -A are mutually exclusive.");
        if (SrcBuff)
           isBad = bbcp_Fmsg("Config", "-N xx and -d are mutually exclusive.");
        if (Options & bbcp_FORCE && Options & bbcp_OPIPE)
@@ -490,6 +538,10 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
       {bbcp_Fmsg("Config", "'-E ...=' and -r are mutually exclusive.");
            Cleanup(1, argv[0], cfgfd);
       }
+
+// Turn off symlink handling unless this is a recursive copy
+//
+   if (!(Options & bbcp_RECURSE)) Options &= ~(bbcp_SLFOLLOW | bbcp_SLKEEP);
 
 // Check for options mutually exclusive with '-k'
 //
@@ -607,7 +659,7 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
    if (!CKPdir && Options & bbcp_APPEND && Options & bbcp_SNK)
       {const char *ckpsfx = "/.bbcp";
        char *homedir = bbcp_OS.getHomeDir();
-       CKPdir = (char *)malloc(strlen(homedir) + sizeof(ckpsfx) + 1);
+       CKPdir = (char *)malloc(strlen(homedir) + strlen(ckpsfx) + 1);
        strcpy(CKPdir, homedir); strcat(CKPdir, ckpsfx);
        if (mkdir(CKPdir, 0755) && errno != EEXIST)
           {bbcp_Emsg("Config",errno,"creating restart directory",CKPdir);
@@ -621,6 +673,11 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
    MTLevel = Streams + (Complvl ?  (Options & bbcp_SNK  ? 3 : 2) : 1)
                      + (Progint && (Options & bbcp_SNK) ? 1 : 0) + 2;
    DEBUG("Optimum MT level is " <<MTLevel);
+
+// Finally check if we should warn that we downgraded to IPv4
+//
+   if (warnIPV) bbcp_Fmsg("Config", bbcp_HostName,
+                          "encountered an IPv6 fault; IPv4 forced.");
 
 // All done
 //
@@ -639,16 +696,17 @@ void bbcp_Config::Arguments(int argc, char **argv, int cfgfd)
 void bbcp_Config::help(int rc)
 {
 H("Usage:   bbcp [Options] [Inspec] Outspec")
-I("Options: [-a [dir]] [-b [+]bf] [-B bsz] [-c [lvl]] [-C cfn] [-D] [-d path]")
-H("         [-e] [-E csa] [-f] [-F] [-h] [-i idfn] [-I slfn] [-k] [-K]")
+I("Options: [-a [dir]] [-A] [-b [+]bf] [-B bsz] [-c [lvl]] [-C cfn] [-D] [-d path]")
+H("         [-e] [-E csa] [-f] [-F] [-g] [-h] [-i idfn] [-I slfn] [-k] [-K]")
 H("         [-L opts[@logurl]] [-l logf] [-m mode] [-n] [-N nio] [-o] [-O] [-p]")
 H("         [-P sec] [-r] [-R [args]] [-q qos] [-s snum] [-S srcxeq] [-T trgxeq]")
 H("         [-t sec] [-v] [-V] [-u loc] [-U wsz] [-w [=]wsz] [-x rate] [-y] [-z]")
-H("         [-Z pnf[:pnl]] [-4 [loc]] [-$] [-#] [--]")
+H("         [-Z pnf[:pnl]] [-4 [loc]] [-~] [-@ {copy|follow|ignore}] [-$] [-#] [--]")
 I("I/Ospec: [user@][host:]file")
 if (rc) exit(rc);
 I("Function: Secure and fast copy utility.")
 I("-a dir  append mode to restart a previously failed copy.")
+H("-A      automatically create destination directory if it does not exist.")
 H("-b bf   sets the read blocking factor (default is 1).")
 H("-b +bf  adds additional output buffers to mitigate ordering stalls.")
 H("-B bsz  sets the read/write I/O buffer size (default is wsz).")
@@ -658,7 +716,7 @@ H("-d path requests relative source path addressing and target path creation.")
 H("-D      turns on debugging.")
 H("-e      error check data for transmission errors using md5 checksum.")
 H("-E csa  specify checksum alorithm and optionally report or verify checksum.")
-H("        csa: [%]{a32|c32|md5}[=[<value> | <outfile>]]")
+H("        csa: [%]{a32|c32|md5|c32z|c32c}[=[<value> | <outfile>]]")
 H("-f      forces the copy by first unlinking the target file before copying.")
 H("-F      does not check to see if there is enough space on the target node.")
 H("-h      print help information.")
@@ -697,9 +755,14 @@ H("-y what perform fsync before closing the output file when what is 'd'.")
 H("        When what is 'dd' then the file and directory are fsynced.")
 H("-z      use reverse connection protocol (i.e., target to source).")
 H("-Z      use port range pn1:pn2 for accepting data transfer connections.")
+H("-+      for recursive copies only copy readable/searchable items.")
 H("-4      use only IPV4 stack; optionally, at specified location.")
+H("-~      preserve atime and mtime only.")
+H("-@      specifies how symbolic links are handled: copy recreates the symlink,")
+H("        follow copies the symlink target, and ignore skips it (default).")
 H("-$      print the license and exit.")
 H("-#      print the version and exit.")
+H("-^      omit copying empty directories (same as --omit-emptydirs).")
 H("--      allows an option with a defaulted optional arg to appear last.")
 I("user    the user under which the copy is to be performed. The default is")
 H("        to use the current login name.")
@@ -735,16 +798,17 @@ int bbcp_Config::ConfigInit(int argc, char **argv)
 // Make sure we have at least one argument to determine who we are
 //
    if (argc >= 2)
-           if (!strcmp(argv[1], SrcArg))
+     {     if (!strcmp(argv[1], "SRC"))
             {Options |= bbcp_SRC; bbcp_Debug.Who = (char *)"SRC"; return 0;}
-      else if (!strcmp(argv[1], SnkArg))
+      else if (!strcmp(argv[1], "SNK"))
             {Options |= bbcp_SNK; bbcp_Debug.Who = (char *)"SNK"; return 0;}
       else MyProg = strdup(argv[0]);
+     }
 
 // Use the config file, if present
 //
-   if (ConfigFN = getenv("bbcp_CONFIGFN"))
-      {if (retc = Configure(ConfigFN)) return retc;}
+   if ((ConfigFN = getenv("bbcp_CONFIGFN")))
+      {if ((retc = Configure(ConfigFN))) return retc;}
       else {
       // Use configuration file in the home directory, if any
       //
@@ -754,7 +818,7 @@ int bbcp_Config::ConfigInit(int argc, char **argv)
       strcpy(ConfigFN, homedir); strcat(ConfigFN, cfn);
       if (stat(ConfigFN, &buf))
          {retc = 0; free(ConfigFN); ConfigFN = 0;}
-         else if (retc = Configure(ConfigFN)) return retc;
+         else if ((retc = Configure(ConfigFN))) return retc;
      }
 
 // Establish the FD limit
@@ -903,6 +967,7 @@ void bbcp_Config::Config_Ctl(int rwbsz)
 // Now generate all the options we will send to the source and sink
 //
    if (Options & bbcp_APPEND)    Add_Opt('a');
+   if (Options & bbcp_AUTOMKD)   Add_Opt('A');
    if (CKPdir)                                 Add_Str(CKPdir);
    if (BAdd)                    {Add_Opt('b'); Add_Nup(BAdd);}
    if (Bfact)                   {Add_Opt('b'); Add_Num(Bfact);}
@@ -928,7 +993,10 @@ void bbcp_Config::Config_Ctl(int rwbsz)
    if (Options & bbcp_XPIPE)    {Add_Opt('N'); Add_Str(upSpec);}
    if (Options & bbcp_ORDER)     Add_Opt('o');
    if (Options & bbcp_OMIT)      Add_Opt('O');
-   if (Options & bbcp_PCOPY)     Add_Opt('p');
+   if (Option2 & bbcp2_SKPEDIR)  Add_Opt('^');
+   if (Option2 & bbcp2_SKPIERR)  Add_Opt('<');
+   if (Option2 & bbcp2_SKPOERR)  Add_Opt('>')
+   if (Options & bbcp_PCOPY)     Add_Opt((Options & bbcp_PTONLY ? '~' : 'p'));
    if (Progint)                 {Add_Opt('P'); Add_Num(Progint);}
    if ((n = bbcp_Net.QoS()))    {Add_Opt('q'); Add_Num(n); }
    if (Options & bbcp_RECURSE)   Add_Opt('r');
@@ -953,6 +1021,12 @@ void bbcp_Config::Config_Ctl(int rwbsz)
    if (Options & (bbcp_IDIO | bbcp_ODIO))
                                 {Add_Opt('u'); Add_Str(ubSpec);}
    if (PorSpec)                 {Add_Opt('Z'); Add_Str(PorSpec);}
+   if (Options & (bbcp_SLFOLLOW | bbcp_SLKEEP))
+                                {Add_Opt('@');
+                                 if (Options & bbcp_SLKEEP) {Add_Str("keep");}
+                                    else      {Add_Str("follow");}
+                                }
+   if (Options & bbcp_RDONLY)    Add_Opt('+');
    CopyOpts = strdup(cbuff);
 }
   
@@ -1211,9 +1285,11 @@ int bbcp_Config::EOpts(char *opts)
    csLen = strlen(opts);
    if (csLen >= (int)sizeof(csName)) *csName = 0;
       else strcpy(csName, opts);
-        if (!strcmp("a32", csName)) {csType = bbcp_csA32; csSize =  4;}
-   else if (!strcmp("c32", csName)) {csType = bbcp_csC32; csSize =  4;}
-   else if (!strcmp("md5", csName)) {csType = bbcp_csMD5; csSize = 16;}
+        if (!strcmp("a32", csName))  {csType = bbcp_csA32;  csSize =  4;}
+   else if (!strcmp("c32", csName))  {csType = bbcp_csC32;  csSize =  4;}
+   else if (!strcmp("c32z", csName)) {csType = bbcp_csC32Z; csSize =  4;}
+   else if (!strcmp("c32c", csName)) {csType = bbcp_csC32C; csSize =  4;}
+   else if (!strcmp("md5", csName))  {csType = bbcp_csMD5;  csSize = 16;}
    else {bbcp_Fmsg("Config", "Invalid checksum type -", opts); return -1;}
 
 // Verify the checksum value if one was actually specified
@@ -1322,7 +1398,7 @@ int bbcp_Config::HostAndPort(const char *what, char *path, char *buff, int bsz)
     if (*hn == ':' && hn++ && *hn)
        {errno = 0;
         pnum = strtol(hn, (char **)NULL, 10);
-        if (!pnum && errno || pnum > 65535)
+        if ((!pnum && errno) || pnum > 65535)
            {bbcp_Fmsg("Config",what,"port invalid -", hn); return -1;}
        }
 
@@ -1367,6 +1443,8 @@ int bbcp_Config::ROpts(char *opts)
                           ||  (rtLimit = atoi(rOpts+2)) <= 0)
                              return ROptsErr(rOpts);
                           break;
+                case 't': Options |= bbcp_RTTMP;
+                          break;
                 case 'v': Options |= bbcp_RTCVERC;
                           break;
                 case '/':
@@ -1392,6 +1470,32 @@ int bbcp_Config::ROptsErr(char *eTxt)
     return -1;
 }
  
+/******************************************************************************/
+/*                               s e t A r g s                                */
+/******************************************************************************/
+
+void bbcp_Config::setArgs(const char *aType, char *&aDst, char *aSrc)
+{
+   int n;
+
+// Free up whatever is in the destination arg
+//
+   if (aDst) free(aDst);
+
+// Trim of leading spaces from the source arg
+//
+   while(*aSrc == ' ') aSrc++;
+
+// Allocate needed storage
+//
+   n = strlen(aType) + 1 + strlen(aSrc) + 1;
+   aDst = (char *)malloc(n);
+
+// Format the arguments and set them
+//
+   snprintf(aDst, n, "%s %s", aType, aSrc);
+}
+
 /******************************************************************************/
 /*                                 s e t C S                                  */
 /******************************************************************************/
@@ -1440,42 +1544,58 @@ void bbcp_Config::setOpts(bbcp_Args &Args)
      Args.Option("config",     6, 'C', ':');
      Args.Option("dirbase",    3, 'd', ':');
      Args.Option("debug",      5, 'D', 0);
-// e
+// e for -e (same as --checksum)
      Args.Option("checksum",   5, 'E', ':');
      Args.Option("force",      1, 'f', 0);
      Args.Option("nofschk",    4, 'F', ':');
+     Args.Option("gross",      1, 'g', 0); // deprecated and ignored
+// G is available
      Args.Option("help",       1, 'h', ':');
      Args.Option("idfile",     1, 'i', ':');
      Args.Option("infiles",    2, 'I', ':');
      Args.Option("ipv4",       4, '4', '.');
      Args.Option("keep",       1, 'k', 0);
-// K
+// K for -K
      Args.Option("license",    7, '$', 0);
+     Args.Option("links",      4, '@', ':');  // synonym for --symlinks
      Args.Option("logfile",    1, 'l', ':');
-// L
+// L for -L
+     Args.Option("mkdir",      3, 'A', 0);
      Args.Option("mode",       1, 'm', ':');
      Args.Option("nodns",      1, 'n', 0);
      Args.Option("pipe",       4, 'N', ':');
      Args.Option("order",      1, 'o', 0);
-     Args.Option("omit",       4, 'O', 0);
+     Args.Option("omit",       4, 'O', 0);  // List in increasing min length!
+     Args.Option("omit-ed",         7, '^', 0);
+     Args.Option("omit-ie",         7, '<', 0);
+     Args.Option("omit-oe",         7, '>', 0);
+     Args.Option("omit-dups",       9, 'O', 0);
+     Args.Option("omit-emptydirs", 11, '^', 0);
+     Args.Option("omit-inerrs",    11, '<', 0);
+     Args.Option("omit-outerrs",   12, '>', 0);
      Args.Option("preserve",   1, 'p', 0);
      Args.Option("progress",   4, 'P', ':');
+     Args.Option("ptime",      2, '~', 0);
      Args.Option("qos",        3, 'q', ':');
-     Args.Option("recursive",  1, 'r', 0);
+// Q is available
+     Args.Option("readable",   4, '+', 0);
      Args.Option("realtime",   4, 'R', ':');
+     Args.Option("recursive",  1, 'r', 0);
      Args.Option("streams",    1, 's', ':');
-// S
+     Args.Option("symlinks",   7, '@', ':'); // synonym for --links
+// S for -S
      Args.Option("timelimit",  1, 't', ':');
-// T
+// T for -T
      Args.Option("verbose",    1, 'v', 0);
      Args.Option("vverbose",   2, 'V', 0);
      Args.Option("version",    7, '#', 0);
      Args.Option("unbuffered", 1, 'u', ':');
-// U
+// U for -U
      Args.Option("windowsz",   1, 'w', ':');
      Args.Option("xfrrate",    1, 'x', ':');
-// Y
+// Y used for password
      Args.Option("sync",       4, 'y', 0);
+// X is available
      Args.Option("reverse",    3, 'z', 0);
      Args.Option("port",       4, 'Z', ':');
 }
@@ -1610,8 +1730,9 @@ int bbcp_Config::Unpipe(char *opts)
 void bbcp_Config::Cleanup(int rc, char *cfgfn, int cfgfd)
 {
 if (cfgfd >= 0 && cfgfn)
-   if (rc > 1)
+  {if (rc > 1)
         bbcp_Fmsg("Config","Check config file",cfgfn,"for conflicts.");
    else bbcp_Fmsg("Config", "Error occured processing config file", cfgfn);
+  }
 exit(rc);
 }

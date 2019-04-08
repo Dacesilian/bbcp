@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                            b b c p _ M D 5 . h                             */
 /*                                                                            */
-/*(c) 2010-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -44,7 +45,13 @@ typedef unsigned int uint32;
 
 #include "bbcp_Headers.h"
 #include "bbcp_ChkSum.h"
+#ifdef MACOS
+#include "CommonCrypto/CommonDigest.h"
+#undef MD5_CTX
+#define MD5_CTX CC_MD5_CTX
+#else
 #include "openssl/md5.h"
+#endif
   
 class bbcp_MD5_openssl : public bbcp_ChkSum
 {

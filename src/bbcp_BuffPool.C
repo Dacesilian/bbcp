@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                       b b c p _ B u f f P o o l . C                        */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -82,14 +83,14 @@ bbcp_BuffPool::~bbcp_BuffPool()
 
 // Free all of the buffers in the empty queue
 //
-   while(currp = last_empty)
+   while((currp = last_empty))
         {last_empty = last_empty->next; delete currp;}
 //cerr <<bbcp_Debug.Who <<"Bdestroy num " <<j++ <<" @ " <<hex <<(int)currp <<dec <<endl;
 
 // Free all full buffers
 //
    FullPool.Lock();
-   while(currp = next_full)
+   while((currp = next_full))
         {next_full = next_full->next; delete currp;}
    FullPool.UnLock();
 }

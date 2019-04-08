@@ -8,7 +8,7 @@ BINDIR     = ../bin/$(OSVER)
 
 OBJDIR     = ../obj/$(OSVER)
 
-ENVCFLAGS  =    -Dunix -D_BSD -D_ALL_SOURCE
+ENVCFLAGS  =    -Dunix -D_BSD -D_ALL_SOURCE -Wall
 
 ENVINCLUDE = -I. -I/usr/local/include -I/usr/include 
 
@@ -36,7 +36,7 @@ SUNCC      = CC
 SUNcc      = cc
 
 S86OPT     = -D_REENTRANT -DOO_STD $(NLGR) -DSUN -DSUNX86 -Wno-deprecated
-S86OPT     = $(SUNOPT) -DSUNX86 
+S86OPT     = $(SUNOPT) -DSUNX86
 
 S86CC      = CC
 S86cc      = gcc
@@ -77,6 +77,8 @@ SOURCE =      \
      bbcp_Args.C \
      bbcp_BuffPool.C \
      bbcp_C32.C \
+     bbcp_C32C.C \
+     bbcp_C32_Zip.C \
      bbcp_ChkSum.C \
      bbcp_Config.C \
      bbcp_Emsg.C \
@@ -103,6 +105,7 @@ SOURCE =      \
      bbcp_Protocol.C \
      bbcp_Pthread.C \
      bbcp_RTCopy.C \
+     bbcp_Set.C \
      bbcp_Stream.C \
      bbcp_System.C \
      bbcp_Timer.C \
@@ -115,6 +118,8 @@ OBJECT =      \
      $(OBJDIR)/bbcp_Args.o \
      $(OBJDIR)/bbcp_BuffPool.o \
      $(OBJDIR)/bbcp_C32.o \
+     $(OBJDIR)/bbcp_C32C.o \
+     $(OBJDIR)/bbcp_C32_Zip.o \
      $(OBJDIR)/bbcp_ChkSum.o \
      $(OBJDIR)/bbcp_Config.o \
      $(OBJDIR)/bbcp_Emsg.o \
@@ -141,6 +146,7 @@ OBJECT =      \
      $(OBJDIR)/bbcp_Protocol.o \
      $(OBJDIR)/bbcp_Pthread.o \
      $(OBJDIR)/bbcp_RTCopy.o \
+     $(OBJDIR)/bbcp_Set.o \
      $(OBJDIR)/bbcp_Stream.o \
      $(OBJDIR)/bbcp_System.o \
      $(OBJDIR)/bbcp_Timer.o \
@@ -152,7 +158,7 @@ TARGET  = $(BINDIR)/bbcp
 
 
 all:
-	@make `uname` OSVER=`../MakeSname` 
+	@+make `uname` OSVER=`../MakeSname` RELEASE=`../MakeSname -r`
 	@echo Make done.
 
 doitall: $(TARGET)
@@ -189,12 +195,12 @@ FreeBSD:
 	LIBS="$(BSDLIBS)"
 
 Linux:
-	@make makeLinux`/bin/uname -m` \
+	@+make makeLinux`/bin/uname -i` \
 	MD5HEADER=bbcp_MD5_openssl.h \
 	OBJMD5="$(OBJDIR)/bbcp_MD5_openssl.o"
 
 makeLinuxi386:
-	@make $(MKPARMS)  \
+	@+make $(MKPARMS)  \
 	CC=$(LNXCC) \
 	BB=$(LNXcc) \
 	CFLAGS="$(ENVCFLAGS) $(LNXOPT)" \
@@ -202,17 +208,8 @@ makeLinuxi386:
 	INCLUDE="$(ENVINCLUDE)" \
 	LIBS="$(LNXLIBS32)"
 
-makeLinuxi686:
-	@make $(MKPARMS)  \
-	CC=$(LNXCC) \
-	BB=$(LNXcc) \
-	CFLAGS="$(ENVCFLAGS) $(LNXOPT)" \
-	BFLAGS="$(ENVCFLAGS) $(LNXOPT_B)" \
-	INCLUDE="$(ENVINCLUDE)" \
-	LIBS="$(LNXLIBS32)"
-
-makeLinuxx86_64:
-	@make $(MKPARMS)  \
+makeLinuxx86_64 makeLinuxaarch64:
+	@+make $(MKPARMS) RR=$(RELNUM) \
 	CC=$(LNXCC) \
 	BB=$(LNXcc) \
 	CFLAGS="$(ENVCFLAGS) $(LNXOPT)" \
@@ -221,7 +218,7 @@ makeLinuxx86_64:
 	LIBS="$(LNXLIBS64)"
 
 Darwin:
-	@MACOSX_DEPLOYMENT_TARGET=10.5;\
+	@MACOSX_DEPLOYMENT_TARGET=10.11;\
 	make $(MKPARMS)  \
 	CC=$(MACCC) \
 	BB=$(MACcc) \
@@ -242,26 +239,26 @@ UNICOS/mp:
 	LIBS="$(LNXLIBS)"
 
 SunOS:
-	@make $(MKPARMS)  \
+	@make $(MKPARMS) \
 	CC=$(SUNCC) \
 	BB=$(SUNcc) \
-	CFLAGS="$(ENVCFLAGS) $(SUNOPT) $(OPT)" \
+	CFLAGS="$(ENVCFLAGS) $(SUNOPT) $(OPT) -DRELEASE=$(RELEASE)" \
 	INCLUDE="$(ENVINCLUDE)" \
 	LIBS="$(SUNLIBS)"
 
 SunX86:
-	@make $(MKPARMS)  \
+	@make $(MKPARMS) \
 	CC=$(S86CC) \
 	BB=$(S86cc) \
-	CFLAGS="$(ENVCFLAGS) $(S86OPT) $(OPT)" \
+	CFLAGS="$(ENVCFLAGS) $(S86OPT) $(OPT) -DRELEASE=$(RELEASE)" \
 	INCLUDE="$(ENVINCLUDE)" \
 	LIBS="$(SUNLIBS)"
 
 Sungcc:
-	@make $(MKPARMS)  \
+	@make $(MKPARMS) \
 	CC=$(SUNGCC) \
 	BB=$(SUNGcc) \
-	CFLAGS="$(ENVCFLAGS) $(SUNGCCOPT) $(OPT)" \
+	CFLAGS="$(ENVCFLAGS) $(SUNGCCOPT) $(OPT) -DRELEASE=$(RELEASE)" \
 	INCLUDE="$(ENVINCLUDE)" \
 	LIBS="$(SUNLIBS)" \
 	OSVER=`../MakeSname`
@@ -289,8 +286,16 @@ $(OBJDIR)/bbcp_C32.o: bbcp_C32.C bbcp_C32.h bbcp_ChkSum.h bbcp_Endian.h
 	@echo Compiling bbcp_C32.C
 	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
 
+$(OBJDIR)/bbcp_C32C.o: bbcp_C32C.C bbcp_C32C.h bbcp_ChkSum.h bbcp_Endian.h
+	@echo Compiling bbcp_C32C.C
+	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
+
+$(OBJDIR)/bbcp_C32_Zip.o: bbcp_C32_Zip.C bbcp_C32_Zip.h bbcp_ChkSum.h bbcp_Endian.h
+	@echo Compiling bbcp_C32_Zip.C
+	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
+
 $(OBJDIR)/bbcp_ChkSum.o: bbcp_ChkSum.C bbcp_ChkSum.h bbcp_Endian.h \
-                         bbcp_A32.h bbcp_A32_zlib.h bbcp_C32.h bbcp_MD5.h $(MD5HEADER)
+                         bbcp_A32.h bbcp_A32_zlib.h bbcp_C32.h bbcp_C32_Zip.h bbcp_MD5.h $(MD5HEADER)
 	@echo Compiling bbcp_ChkSum.C
 	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
 
@@ -432,6 +437,10 @@ $(OBJDIR)/bbcp_Pthread.o: bbcp_Pthread.C bbcp_Pthread.h
 $(OBJDIR)/bbcp_RTCopy.o: bbcp_RTCopy.C bbcp_RTCopy.h bbcp_Config.h \
                          bbcp_Emsg.h bbcp_FileSystem.h bbcp_Pthread.h
 	@echo Compiling bbcp_RTCopy.C
+	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
+
+$(OBJDIR)/bbcp_Set.o: bbcp_Set.C bbcp_C32.h
+	@echo Compiling bbcp_Set.C
 	@$(CC) -c $(CFLAGS) $(INCLUDE) $(*F).C -o $(OBJDIR)/$(*F).o
 
 $(OBJDIR)/bbcp_Stream.o: bbcp_Stream.C bbcp_Stream.h bbcp_Config.h bbcp_Debug.h \

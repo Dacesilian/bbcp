@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                        b b c p _ F S _ U n i x . C                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -33,6 +34,7 @@
 #include <fcntl.h>
 #include <grp.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <utime.h>
 #include <sys/param.h>
@@ -48,8 +50,18 @@
 #include "bbcp_System.h"
 #include "bbcp_Debug.h"
 
+/******************************************************************************/
+/*                         L o c a l   D e f i n e s                          */
+/******************************************************************************/
+  
 #if defined(MACOS) || defined (AIX)
 #define S_IAMB      0x1FF
+#endif
+
+#if defined(SUN) && RELEASE < 511
+#define READLINK(fd, dent, path, buff, blen) readlink(path,buff,blen)
+#else
+#define READLINK(fd, dent, path, buff, blen) readlinkat(fd,dent,buff,blen)
 #endif
 
 /******************************************************************************/
@@ -64,28 +76,35 @@ extern bbcp_System bbcp_OS;
   
 int bbcp_FS_Unix::Applicable(const char *path)
 {
+// Duplicate the path and only consider the first component (mount point)
+//
+   if (!fs_path)
+      {char *slash;
+       fs_path = strdup(path);
+       if ((slash = index(fs_path+1, '/'))) *slash = 0;
+      }
+
+// FREEBSD doesn't have a statvfs, so we punt
+//
 #ifdef FREEBSD
-   if (!fs_path) fs_path = strdup(path);
+   secSize = 512;
 #else
    struct statvfs buf;
 
 // To find out whether or not we are applicable, simply do a statvfs on the
 // incomming path. If we can do it, then we are a unix filesystem.
 //
-   if (statvfs(path, &buf)) return 0;
+   if (statvfs(fs_path, &buf)) return 0;
 
 // Set the sector size
 //
    secSize = buf.f_frsize;
 
-// Save the path to this filesystem if we don't have one. This is a real
-// kludgy short-cut since in bbcp we only have a single output destination.
+// Record the unique filesystem ID.
 //
-   if (!fs_path) 
-      {fs_path = strdup(path); 
-       memcpy((void *)&fs_id, (const void *)&buf.f_fsid, sizeof(fs_id));
-      }
+   memcpy((void *)&fs_id, (const void *)&buf.f_fsid, sizeof(fs_id));
 #endif
+
    return 1;
 }
 
@@ -171,8 +190,16 @@ long long bbcp_FS_Unix::getSize(int fd, long long *bsz)
 int bbcp_FS_Unix::MKDir(const char *path, mode_t mode)
 {
     if (mkdir(path, mode)) return -errno;
+    return 0;
+}
 
-    if (chmod(path, 0755)) return -errno;
+/******************************************************************************/
+/*                                 M K L n k                                  */
+/******************************************************************************/
+
+int bbcp_FS_Unix::MKLnk(const char *ldata, const char *path)
+{
+    if (symlink(ldata, path)) return -errno;
 
     return 0;
 }
@@ -224,7 +251,7 @@ bbcp_File *bbcp_FS_Unix::Open(const char *fn, int opts, int mode, const char *fa
   
 int bbcp_FS_Unix::RM(const char *path)
 {
-    if (!unlink(path)) return 0;
+    if (!remove(path)) return 0;
     return -errno;
 }
 
@@ -289,25 +316,39 @@ int bbcp_FS_Unix::Stat(const char *path, bbcp_FileInfo *sbuff)
 /******************************************************************************/
   
 int bbcp_FS_Unix::Stat(const char *path, const char *dent, int fd,
-                       int nolnks, bbcp_FileInfo *sbuff)
+                       int chklnks, bbcp_FileInfo *sbuff)
 {
    struct stat xbuff;
+   char lbuff[2048];
+   int n;
 
 // Perform the stat function
 //
 #ifdef AT_SYMLINK_NOFOLLOW
-   if (fstatat(fd, dent, &xbuff, (nolnks?AT_SYMLINK_NOFOLLOW:0))) return -errno;
-   if (nolnks && (xbuff.st_mode & S_IFMT) == S_IFLNK) return -ENOENT;
+   if (fstatat(fd, dent, &xbuff, AT_SYMLINK_NOFOLLOW)) return -errno;
+   if ((xbuff.st_mode & S_IFMT) != S_IFLNK)
+      return (sbuff ? Stat(xbuff, sbuff) : 0);
+   if (chklnks > 0) return -ENOENT;
    if (!sbuff) return 0;
+   if ((n = READLINK(fd,dent,path,lbuff,sizeof(lbuff)-1)) < 0) return -errno;
+// if ((n = readlinkat(fd, dent, lbuff, sizeof(lbuff)-1)) < 0) return -errno;
+   lbuff[n] = 0;
+   if(sbuff->SLink) free(sbuff->SLink);
+   sbuff->SLink = strdup(lbuff);
+   if (!chklnks && fstatat(fd, dent, &xbuff, 0)) return -errno;
    return Stat(xbuff, sbuff);
 #else
-   if (nolnks)
-      {if (lstat(path, &xbuff)) return -errno;
-       if ((xbuff.st_mode & S_IFMT) == S_IFLNK) return -ENOENT;
-          else return Stat(xbuff, sbuff);
-      }
+   if (lstat(path, &xbuff)) return -errno;
+   if ((xbuff.st_mode & S_IFMT) != S_IFLNK)
+      return (sbuff ? Stat(xbuff, sbuff) : 0);
+   if (chklnks > 0) return -ENOENT;
    if (!sbuff) return 0;
-   return Stat(path, sbuff);
+   if ((n = readlink(path, lbuff, sizeof(lbuff)-1)) < 0) return -errno;
+   lbuff[n] = 0;
+   if(sbuff->SLink) free(sbuff->SLink);
+   sbuff->SLink = strdup(lbuff);
+   if (!chklnks && stat(path, &xbuff)) return -errno;
+   return Stat(xbuff, sbuff);
 #endif
 }
 
@@ -334,6 +375,8 @@ int bbcp_FS_Unix::Stat(struct stat &xbuff, bbcp_FileInfo *sbuff)
                                     }
    else if (S_ISFIFO(xbuff.st_mode)) sbuff->Otype = 'p';
    else if (S_ISDIR( xbuff.st_mode)) sbuff->Otype = 'd';
+   else if ((xbuff.st_mode & S_IFMT) == S_IFLNK)
+                                     sbuff->Otype = 'l';
    else                              sbuff->Otype = '?';
 
 // Convert gid to a group name

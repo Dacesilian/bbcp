@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                         b b c p _ C h k S u m . C                          */
 /*                                                                            */
-/*(c) 2010-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*                            All Rights Reserved                             */
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -25,11 +26,13 @@
 /* specific prior written permission of the institution or contributor.       */
 /******************************************************************************/
   
-#include "bbcp_Config.h"
 #include "bbcp_ChkSum.h"
+#include "bbcp_Config.h"
 #include "bbcp_A32.h"
 #include "bbcp_A32_zlib.h"
 #include "bbcp_C32.h"
+#include "bbcp_C32_Zip.h"
+#include "bbcp_C32C.h"
 #include "bbcp_MD5.h"
 #include "bbcp_MD5_openssl.h"
 
@@ -49,6 +52,8 @@ bbcp_ChkSum *bbcp_ChkSum::Alloc(int csType)
 #else
           case bbcp_csMD5: return (bbcp_ChkSum *)new bbcp_MD5;
 #endif
+          case bbcp_csC32Z:return (bbcp_ChkSum *)new bbcp_C32_Zip;
+          case bbcp_csC32C:return (bbcp_ChkSum *)new bbcp_C32C;
           default:         break;
          }
 

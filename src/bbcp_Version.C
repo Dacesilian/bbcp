@@ -1,8 +1,9 @@
 /******************************************************************************/
 /*                                                                            */
-/*                        b b c p _ V e r s i o n . h                         */
+/*                        b b c p _ V e r s i o n . C                         */
 /*                                                                            */
-/*(c) 2010-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. Scroll to end for Terms and Conditions of use    */
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. Scroll to end for Terms and Conditions of use    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -37,7 +38,7 @@
 /*                                                                            */
 /******************************************************************************/
 
-extern bbcp_Config  bbcp_Config;
+extern bbcp_Config  bbcp_Cfg;
 
        bbcp_Version bbcp_Version;
   
@@ -47,9 +48,10 @@ extern bbcp_Config  bbcp_Config;
   
 bbcp_Version::bbcp_Version()
 {
-Copyright = "(c) 2002-2014 by the Board of Trustees of the Leland Stanford, Jr., University";
+Copyright = "(c) 2002-2017 by the Board of Trustees of the Leland Stanford, Jr., University";
 Author    = "Andrew Hanushevsky";
-Version   = "Version: 14.04.14.00.1";
+//                    12345678901
+Version   = "Version: 17.12.00.00.0";
 //           0123456789
 VData     = Version+9;
 };
@@ -78,9 +80,9 @@ int bbcp_Version::Verify(char *node, char *nodever)
 
     bbcp_Fmsg("Version", "Warning:",node,"is running",vset,"version of bbcp");
 
-    if (bbcp_Config.Options & bbcp_BLAB)
+    if (bbcp_Cfg.Options & bbcp_BLAB)
        {bbcp_Fmsg("Version", node, "running version", nodever);
-        bbcp_Fmsg("Version", bbcp_Config.MyHost, "running version", VData);
+        bbcp_Fmsg("Version", bbcp_Cfg.MyHost, "running version", VData);
        }
     return 0;
 };

@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                    b b c p _ N e t A d d r I n f o . C                     */
 /*                                                                            */
-/*(c) 2013-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*                            All Rights Reserved                             */
+/*(c) 2013-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*                            All Rights Reserved                             */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -172,6 +173,37 @@ int bbcp_NetAddrInfo::Format(char *bAddr, int bLen, fmtUse theFmt, int fmtOpts)
    if ((n = snprintf(bAddr, bLen, pFmt, pNum)) >= bLen)
       return QFill(bAddr, bLen);
    return totLen+n;
+}
+  
+/******************************************************************************/
+/*                            i s H o s t N a m e                             */
+/******************************************************************************/
+
+bool bbcp_NetAddrInfo::isHostName(const char *name)
+{
+   const char *dot;
+   int dnum;
+
+// First check for Iv6 format or hostname
+//
+   if (*name == '[')    return false;
+   if (!isdigit(*name)) return true;
+
+// The IPv4 case is more complicated. The fastest way here is this is a
+// host name if there are no dots or if the last component is not a digit
+// according to the RFC spec.
+//
+   if (!(dot = rindex(name, '.')) || !isdigit(*(dot+1))) return true;
+
+// We are not out of the woods yet. Now we need to do a full check.
+//
+   name++; dnum = 0;
+   while(*name)
+        {if (*name == '.') dnum++;
+            else if (!isdigit(*name)) return true;
+         name++;
+        }
+   return (dnum == 3 ? false : true);
 }
 
 /******************************************************************************/

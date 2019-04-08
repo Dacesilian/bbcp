@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                       b b c p _ P r o t o c o l . h                        */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -55,7 +56,7 @@ int    Process(bbcp_Node *Node);
 
 int    Request(bbcp_Node *Node);
 
-       bbcp_Protocol() {Local = 0; Remote = 0; tdir = 0;}
+       bbcp_Protocol() : Local(0), Remote(0), fs_obj(0), tdir(0) {}
       ~bbcp_Protocol() {if (Remote) delete Remote;}
 
 private:
@@ -67,7 +68,8 @@ char            *tdir;
 long long        tdir_id;
 
 int   AdjustWS(char *wp, char *bp, int Final);
-int   getCBPort(bbcp_Node *Node);
+void  Chk4Redir(const char *oldHost, const char *newHost);
+int   getCBPort(bbcp_Node *Node, char *&hDest);
 void  getEnd(bbcp_Node *Node);
 void  putCSV(char *Host, char *csFn, char *csVal, int csVsz);
 
@@ -76,8 +78,8 @@ int   Process_flist();
 int   Process_get();
 int   Process_login(bbcp_Link *Net);
 
-int   Request_exit(int retc);
-int   Request_flist(long long &totsz);
+int   Request_exit(int retc, const char *rmd=0);
+int   Request_flist(long long &totsz, int &numlinks, bool dotrim);
 int   Request_get(bbcp_FileSpec *fp);
 int   Request_login(bbcp_Link *Net);
 

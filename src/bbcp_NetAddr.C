@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                        b b c p _ N e t A d d r . C                         */
 /*                                                                            */
-/*(c) 2013-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*                            All Rights Reserved                             */
+/*(c) 2013-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*                            All Rights Reserved                             */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -57,13 +58,32 @@
 /*                        S t a t i c   M e m b e r s                         */
 /******************************************************************************/
 
+namespace
+{
+bool OnlyIPV4()
+{
+   int    fd;
+
+// Detect badly configured or non-extent IPv6 stacks and revert to IPv4 is so.
+//
+   if ((fd = socket(AF_INET6, SOCK_STREAM, 0)) >= 0) close(fd);
+      else if (errno == EAFNOSUPPORT)
+              {bbcp_NetAddr::SetIPV4();
+               return true;
+              }
+   return false;
+}
+}
+
 struct addrinfo   *bbcp_NetAddr::hostHints    = bbcp_NetAddr::Hints(0, 0);
 
 struct addrinfo   *bbcp_NetAddr::huntHintsTCP = bbcp_NetAddr::Hints(1, SOCK_STREAM);
 
 struct addrinfo   *bbcp_NetAddr::huntHintsUDP = bbcp_NetAddr::Hints(2, SOCK_DGRAM);
 
-bool               bbcp_NetAddr::useIPV4      = false;
+// The following must be initialzed after all of the hint structures!
+//
+bool               bbcp_NetAddr::useIPV4      = OnlyIPV4();
 
 /******************************************************************************/
 /*                           C o n s t r u c t o r                            */

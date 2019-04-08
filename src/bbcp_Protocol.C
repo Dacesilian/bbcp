@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                       b b c p _ P r o t o c o l . C                        */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -28,11 +29,14 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <map>
 #include "bbcp_Config.h"
 #include "bbcp_Emsg.h"
 #include "bbcp_Headers.h"
+#include "bbcp_NetAddr.h"
 #include "bbcp_Network.h"
 #include "bbcp_Node.h"
 #include "bbcp_Protocol.h"
@@ -56,59 +60,38 @@ bbcp_Node *np;
 };
 
 /******************************************************************************/
+/*                         L o c a l   O b j e c t s                          */
+/******************************************************************************/
+
+namespace
+{
+
+struct Cmp_Key
+{
+
+   bool operator()(char const *a, char const *b) const
+   {
+//cerr <<"Comp " <<a <<' ' <<b <<endl;
+      return strcmp(a, b) < 0;
+   }
+
+};
+
+std::map<char const *, bbcp_FileSpec *, Cmp_Key> CopySet;
+
+}
+  
+/******************************************************************************/
 /*                      E x t e r n a l   O b j e c t s                       */
 /******************************************************************************/
   
-extern bbcp_Config   bbcp_Config;
+extern bbcp_Config   bbcp_Cfg;
 
 extern bbcp_Network  bbcp_Net;
 
 extern bbcp_Version  bbcp_Version;
 
-/******************************************************************************/
-/*                     T h r e a d   I n t e r f a c e s                      */
-/******************************************************************************/
-
-extern "C"
-{
-void *bbcp_ProtocolLS(void *pp)
-{
-   bbcp_FileSpec  *fP = bbcp_Config.srcSpec;
-   char xBuff[128];
-   time_t tNow, xMsg = time(0)+bbcp_Config.Progint;
-   int numD = 0, numF = 0;
-   int Blab = (bbcp_Config.Options & bbcp_VERBOSE) || bbcp_Config.Progint;
-
-// Extend all directories with the files therein
-//
-   if (Blab) bbcp_Fmsg("Dirlist", "Indexing files to be copied...");
-   while(fP)
-        {if ('d' == fP->Info.Otype)
-            {numD++; fP->ExtendFileSpec(bbcp_Config.srcSpec, numF);}
-         fP = fP->next;
-         if (bbcp_Config.Progint && (tNow = time(0)) >= xMsg)
-            {sprintf(xBuff, "%d file%s in %d director%s so far...",
-                     numF, (numF == 1 ? "" : "s"),
-                     numD, (numD == 1 ? "y": "ies"));
-             bbcp_Fmsg("Dirlist", "Found", xBuff);
-             xMsg = tNow+bbcp_Config.Progint;
-            }
-        }
-
-// Indicate what we found if so wanted
-//
-   if (Blab)
-      {sprintf(xBuff, "%d file%s in %d director%s.",
-               numF, (numF == 1 ? "" : "s"),
-               numD, (numD == 1 ? "y": "ies"));
-       bbcp_Fmsg("Source", "Copying", xBuff);
-      }
-
-// All done
-//
-   return 0;
-}
-}
+extern "C" {extern void *bbcp_FileSpecIndex(void *pp);}
   
 /******************************************************************************/
 /*                              S c h e d u l e                               */
@@ -122,47 +105,69 @@ int bbcp_Protocol::Schedule(bbcp_Node *Fnode, bbcp_FileSpec *Ffs,
 {
    int retc;
 
-   char *cbhost, *addOpt[2];
-   bool fcbh = false;
+   char *cbhost, *addOpt[2], *hDest;
+   bool fcbh = false, noDNS = (bbcp_Cfg.Options & bbcp_NODNS) != 0;
 
 // Start-up the first node
 //
-   if (retc = Fnode->Run(Ffs->username, Ffs->hostname, Fcmd, Ftype))
+   if ((retc = Fnode->Run(Ffs->username, Ffs->hostname, Fcmd, Ftype)))
       return retc;
 
 // Determine additional options
 //
    if (Ftype[1] == 'R')
-      {addOpt[0] = bbcp_Config.CopyOSrc;
-       addOpt[1] = bbcp_Config.CopyOTrg;
+      {addOpt[0] = bbcp_Cfg.CopyOSrc;
+       addOpt[1] = bbcp_Cfg.CopyOTrg;
       } else {
-       addOpt[0] = bbcp_Config.CopyOTrg;
-       addOpt[1] = bbcp_Config.CopyOSrc;
+       addOpt[0] = bbcp_Cfg.CopyOTrg;
+       addOpt[1] = bbcp_Cfg.CopyOSrc;
       }
 
 // Send the arguments
 //
-   if (retc = SendArgs(Fnode, Ffs, (char *)"none", 0, addOpt[0])) return retc;
+   if ((retc = SendArgs(Fnode, Ffs, (char *)"none", 0, addOpt[0]))) return retc;
 
 // Get the callback port from the first host
 //
-   if (retc = getCBPort(Fnode)) return retc;
+   if ((retc = getCBPort(Fnode, hDest))) return retc;
 
 // Start the second node
 //
-   if (retc = Lnode->Run(Lfs->username, Lfs->hostname, Lcmd, Ltype))
+   if ((retc = Lnode->Run(Lfs->username, Lfs->hostname, Lcmd, Ltype)))
       return retc;
 
 // Compute callback hostname and reset callback port
 //
-        if (!(Ffs->hostname)) cbhost = bbcp_Config.MyAddr;
-   else if ((bbcp_Config.Options & bbcp_NODNS && isdigit(Ffs->hostname[0]))
-           ||  Ffs->hostname[0] == '[') cbhost = Ffs->hostname;
-   else fcbh = (cbhost = bbcp_Net.FullHostName(Ffs->hostname,1)) !=0;
+        if (hDest && (noDNS || !(bbcp_Cfg.Options & bbcp_VERBOSE)))
+           {cbhost = hDest; hDest = 0; fcbh = true;}
+   else if (!(Ffs->hostname)) cbhost = bbcp_Cfg.MyAddr;
+   else if (noDNS && !bbcp_NetAddrInfo::isHostName(Ffs->hostname))
+           cbhost = Ffs->hostname;
+   else fcbh = (cbhost = bbcp_Net.FullHostName(Ffs->hostname,(noDNS?1:0))) !=0;
+
+// If the node send us it's actual host name use it preferentially and notify
+// the user if we switched hosts if we need to do that.
+//
+   if (hDest)
+      {if (cbhost)
+          {if (!noDNS && (bbcp_Cfg.Options & bbcp_VERBOSE)
+           &&  strcmp(cbhost, hDest)) Chk4Redir(cbhost, hDest);
+           if (fcbh) free(cbhost);
+          }
+       cbhost = hDest;
+       fcbh = true;
+      }
+
+// After all of this, verify we really do have a callback host
+//
+   if (!cbhost)
+      {bbcp_Fmsg("Protocol", "Unable to determine the callback host!");
+       return EADDRNOTAVAIL;
+      }
 
 // Send the arguments
 //
-   retc = SendArgs(Lnode, Lfs, cbhost, bbcp_Config.CBport, addOpt[1]);
+   retc = SendArgs(Lnode, Lfs, cbhost, bbcp_Cfg.CBport, addOpt[1]);
    if (fcbh) free(cbhost);
    if (retc) return retc;
 
@@ -186,19 +191,25 @@ int bbcp_Protocol::Schedule(bbcp_Node *Fnode, bbcp_FileSpec *Ffs,
 /*                             g e t C B P o r t                              */
 /******************************************************************************/
 
-int bbcp_Protocol::getCBPort(bbcp_Node *Node)
+int bbcp_Protocol::getCBPort(bbcp_Node *Node, char *&hDest)
 {
    char *wp;
    int  pnum;
 
-// The remote program should hve started, get the call back port
+// The remote program should hve started, get the call back port. New versions
+// will also supply their host name which we always use if present.
 //
-   if (wp = Node->GetLine())
+   if ((wp = Node->GetLine()))
       {if ((wp = Node->GetToken()) && !strcmp(wp, "200")
        &&  (wp = Node->GetToken()) && !strcmp(wp, "Port:")
        &&  (wp = Node->GetToken())
-       &&  bbcp_Config.a2n("callback port", wp, pnum, 0, 65535) == 0)
-          {bbcp_Config.CBport = pnum; return 0;}
+       &&  bbcp_Cfg.a2n("callback port", wp, pnum, 0, 65535) == 0)
+          {bbcp_Cfg.CBport = pnum;
+           if ((wp = Node->GetToken()) && !strcmp(wp, "Host:")
+           && (wp = Node->GetToken())) hDest = strdup(wp);
+              else hDest = 0;
+           return 0;
+          }
       }
 
 // Invalid response
@@ -214,9 +225,9 @@ int bbcp_Protocol::getCBPort(bbcp_Node *Node)
 int bbcp_Protocol::setCBPort(int pnum)
 {
 
-// The port number simply gets sent via standard out
+// The port number and our host name simply get sent via standard out
 //
-   cout <<"200 Port: " <<pnum <<endl;
+   cout <<"200 Port: " <<pnum <<" Host: " <<bbcp_Cfg.MyHost <<endl;
    return 0;
 }
 
@@ -265,17 +276,17 @@ void bbcp_Protocol::getEnd(bbcp_Node *Node)
   
 int bbcp_Protocol::Process(bbcp_Node *Node)
 {
-   bbcp_FileSpec *fp = bbcp_Config.srcSpec;
+   bbcp_FileSpec *fp = bbcp_Cfg.srcSpec;
    pthread_t Tid;
    int rc, NoGo = 0;
    char *cp;
 
 // If there is a r/t lock file, make sure it exists
 //
-   if ((bbcp_Config.Options & bbcp_RTCSRC) && bbcp_Config.rtLockf
-   &&  (bbcp_Config.rtLockd = open(bbcp_Config.rtLockf, O_RDONLY)) < 0)
+   if ((bbcp_Cfg.Options & bbcp_RTCSRC) && bbcp_Cfg.rtLockf
+   &&  (bbcp_Cfg.rtLockd = open(bbcp_Cfg.rtLockf, O_RDONLY)) < 0)
       {rc = errno, NoGo = 1;
-       bbcp_Emsg("Config", rc, "opening lock file", bbcp_Config.rtLockf);
+       bbcp_Emsg("Config", rc, "opening lock file", bbcp_Cfg.rtLockf);
       }
 
 // Make sure all of the source files exist at this location. If there is an
@@ -284,7 +295,8 @@ int bbcp_Protocol::Process(bbcp_Node *Node)
 //
    while(fp)
         {NoGo |= fp->Stat();
-         if (fp->Info.Otype == 'd' && !(bbcp_Config.Options & bbcp_RECURSE))
+         if (fp->Info.Otype == 'd' && !(bbcp_Cfg.Options & bbcp_RECURSE)
+         &&  fp->Info.size)
             {bbcp_Fmsg("Source", fp->pathname, "is a directory.");
              NoGo = 1; break;
             }
@@ -295,23 +307,24 @@ int bbcp_Protocol::Process(bbcp_Node *Node)
 // If this is a recursive list, do it in the bacground while we try to connect.
 // This avoids time-outs when large number of files are enumerated.
 //
-   if (!NoGo && bbcp_Config.Options & bbcp_RECURSE)
-      if ((rc = bbcp_Thread_Start(bbcp_ProtocolLS, 0, &Tid)) < 0)
+   if (!NoGo && bbcp_Cfg.Options & bbcp_RECURSE)
+      if ((rc = bbcp_Thread_Start(bbcp_FileSpecIndex, 0, &Tid)) < 0)
          {bbcp_Emsg("Protocol", rc, "starting file enumeration thread.");
           NoGo = 1;
          }
 
 // Establish all connections
 //
-   if (Node->Start(this, (bbcp_Config.Options & bbcp_CON2SRC))
+   if (Node->Start(this, (bbcp_Cfg.Options & bbcp_CON2SRC))
    ||  Node->getBuffers(0)) return 2;
    Local = Node;
 
 // At this point, if we're running with the -r recursive option, our list of
-// file specs (bbcp_Config.srcSpec) is being extended recursively to include
+// file specs (bbcp_Cfg.srcSpec) is being extended recursively to include
 // all subdirs and their contents. We must wait for the thread to finish.
 //
-   if (!NoGo && bbcp_Config.Options & bbcp_RECURSE) bbcp_Thread_Wait(Tid);
+   if (!NoGo && bbcp_Cfg.Options & bbcp_RECURSE)
+      NoGo = (bbcp_Thread_Wait(Tid) != 0);
 
 // If there was a fatal error, we can exit now, the remote side will exit
 //
@@ -361,7 +374,7 @@ int bbcp_Protocol::Process_exit()
 //
    if (!(wp = Remote->GetToken()))
       {bbcp_Fmsg("Process_exit", "missing return code."); retc = 22;}
-      else if (bbcp_Config.a2n("return code", wp, retc, 0, 255)) retc = 22;
+      else if (bbcp_Cfg.a2n("return code", wp, retc, 0, 255)) retc = 22;
 
 // Return to caller
 //
@@ -374,8 +387,8 @@ int bbcp_Protocol::Process_exit()
   
 int bbcp_Protocol::Process_flist()
 {
-   bbcp_FileSpec *dp = bbcp_Config.srcPath;
-   bbcp_FileSpec *fp = bbcp_Config.srcSpec;
+   bbcp_FileSpec *dp = bbcp_Cfg.srcPath;
+   bbcp_FileSpec *fp = bbcp_Cfg.srcSpec;
    char buff[4096];
    int blen;
    const char eoltag[] = "eol\n";
@@ -384,15 +397,18 @@ int bbcp_Protocol::Process_flist()
 // Simply go through the list of paths and report them back to the caller
 
    while(dp)
-      {if ((blen = dp->Encode(buff,(size_t)sizeof(buff))) < 0) return -1;
-       if (Remote->Put(buff, blen)) return -1;
+      {if (!(dp->isEmpty))
+          {if ((blen = dp->Encode(buff,(size_t)sizeof(buff))) < 0) return -1;
+           if (Remote->Put(buff, blen)) return -1;
+          }
        dp = dp->next;
       }
 
 // Simply go through the list of files and report them back to the caller
 
    while(fp) 
-      {if (fp->Info.Otype != 'd' || *(fp->filename))
+      {if ((fp->Info.Otype == 'd' && !(fp->isEmpty))
+       ||  (fp->Info.Otype != 'd' && *(fp->filename)))
           {if ((blen = fp->Encode(buff,(size_t)sizeof(buff))) < 0) return -1;
            if (Remote->Put(buff, blen)) return -1;
           }
@@ -410,7 +426,7 @@ int bbcp_Protocol::Process_flist()
   
 int bbcp_Protocol::Process_get()
 {
-   bbcp_FileSpec *pp = 0, *fp = bbcp_Config.srcSpec;
+   bbcp_FileSpec *pp = 0, *fp = bbcp_Cfg.srcSpec;
    char *wp;
    int retc;
    int   fnum, snum;
@@ -422,10 +438,10 @@ int bbcp_Protocol::Process_get()
 //
    if (!(wp = Remote->GetToken()))
       {bbcp_Fmsg("Process_get", "missing stream number."); return 19;}
-   if (bbcp_Config.a2n("stream number", wp, snum, 0, 255))  return 19;
+   if (bbcp_Cfg.a2n("stream number", wp, snum, 0, 255))  return 19;
    if (!(wp = Remote->GetToken()))
       {bbcp_Fmsg("Process_get", "missing file number."); return 19;}
-   if (bbcp_Config.a2n("file number", wp, fnum, 0, 0x7ffffff))  return 19;
+   if (bbcp_Cfg.a2n("file number", wp, fnum, 0, 0x7ffffff))  return 19;
    if (!(wp = Remote->GetToken()))
       {bbcp_Fmsg("Process_get", "missing file name.");   return 19;}
 
@@ -443,13 +459,13 @@ int bbcp_Protocol::Process_get()
 // Unchain the file specification (get allowed only once)
 //
    if (pp) pp->next = fp->next;
-      else bbcp_Config.srcSpec = fp->next;
+      else bbcp_Cfg.srcSpec = fp->next;
    fp->next = 0;
 
 // Get the optional offset
 //
-   if (wp = Remote->GetToken())
-      {if (bbcp_Config.a2ll("file offset", wp, foffset, 0, -1)) return 22;
+   if ((wp = Remote->GetToken()))
+      {if (bbcp_Cfg.a2ll("file offset", wp, foffset, 0, -1)) return 22;
        if (foffset > fp->Info.size)
           {char buff[128];
            sprintf(buff, "(%lld>%lld)", foffset, fp->Info.size);
@@ -487,7 +503,7 @@ int bbcp_Protocol::Process_login(bbcp_Link *Net)
 // Get the first line of the login stream
 //
    if (!(np->GetLine()))
-      {if (retc = np->LastError())
+      {if ((retc = np->LastError()))
           return bbcp_Emsg("Process_Login", retc, "processing login from",
                                  Net->LinkName());
        return bbcp_Fmsg("Process_Login", "Bad login from", Net->LinkName());
@@ -501,7 +517,7 @@ int bbcp_Protocol::Process_login(bbcp_Link *Net)
 //
    if (!(wp = np->GetToken()) || strcmp(wp, "login")
    ||  !(wp = np->GetToken()) || strcmp(wp, id)
-   ||  !(wp = np->GetToken()) || strcmp(wp, bbcp_Config.SecToken))
+   ||  !(wp = np->GetToken()) || strcmp(wp, bbcp_Cfg.SecToken))
       return bbcp_Fmsg("Process_Login", "Invalid login from", Net->LinkName());
 
 // We are all done if this is not a control stream
@@ -533,12 +549,12 @@ int bbcp_Protocol::Process_login(bbcp_Link *Net)
 
 // We can now do a window/buffer adjustment
 //
-   if (!wp) respWS = bbcp_Config.Wsize;
+   if (!wp) respWS = bbcp_Cfg.Wsize;
       else if (!(respWS = AdjustWS(wp, bp, 0))) return -1;
 
 // Respond to this login request (control only gets a response)
 //
-   blen = sprintf(buff, "204 loginok wsz: %d %d\n",respWS,bbcp_Config.RWBsz);
+   blen = sprintf(buff, "204 loginok wsz: %d %d\n",respWS,bbcp_Cfg.RWBsz);
    if ((retc = np->Put(buff, blen)) < 0) return -1;
 
 // All done
@@ -555,98 +571,137 @@ int bbcp_Protocol::Process_login(bbcp_Link *Net)
 int bbcp_Protocol::Request(bbcp_Node *Node)
 {
    long long totsz=0;
-   int  retc, numfiles, texists;
-   int  outDir = (bbcp_Config.Options & bbcp_OUTDIR) != 0;
-   bbcp_FileSpec *fp;
+   bbcp_FileSpec *dp, *fp;
+   const char *dRM = 0;
    char buff[1024];
+   int  retc, numfiles, numlinks, texists;
+   int  outDir  = (bbcp_Cfg.Options & bbcp_OUTDIR) != 0;
+   bool dotrim  = false;
+   bool doPcopy = (bbcp_Cfg.Options & bbcp_PCOPY) != 0;
+   bool setDMode= (bbcp_Cfg.ModeD != bbcp_Cfg.ModeDC) != 0;
+   bool isAppend= (bbcp_Cfg.Options & bbcp_APPEND) != 0;
 
 // Establish all connections
 //
-   if (Node->Start(this, !(bbcp_Config.Options & bbcp_CON2SRC))
+   if (Node->Start(this, !(bbcp_Cfg.Options & bbcp_CON2SRC))
    ||  Node->getBuffers(1)) return 2;
    Local = Node;
 
+// Determine if the target exists
+//
+   texists = !bbcp_Cfg.snkSpec->Stat(0);
+   fs_obj  = bbcp_Cfg.snkSpec->FSys();
+
+// Make sure we have a filesystem here
+//
+   if (!fs_obj)
+      {bbcp_Fmsg("Request","Target directory", bbcp_Cfg.snkSpec->pathname,
+                 "is not in a known file system");
+       return Request_exit(2, 0);
+      }
+
+// If the target does not exist and we are doing a recursive copy, then we
+// presume that the target should be a directory and we should create it.
+//
+   if (!texists && (outDir || (bbcp_Cfg.Options & bbcp_RECURSE))
+   &&  (bbcp_Cfg.Options & bbcp_AUTOMKD))
+      {retc = fs_obj->MKDir(bbcp_Cfg.snkSpec->pathname, bbcp_Cfg.ModeDC);
+       if (retc) Request_exit(retc);
+       texists = !bbcp_Cfg.snkSpec->Stat(0);
+       dotrim = !outDir; dRM = bbcp_Cfg.snkSpec->pathname;
+//cerr <<"dotrim=" <<dotrim <<" outd=" <<outDir <<" dRM=" <<dRM<<endl;
+      }
+
 // Establish the target directory
 //
-   if ((texists = !bbcp_Config.snkSpec->Stat(0))
-   &&  bbcp_Config.snkSpec->Info.Otype == 'd')
-       tdir = bbcp_Config.snkSpec->pathname;
-      else {int plen;
-            if (plen = bbcp_Config.snkSpec->filename -
-                       bbcp_Config.snkSpec->pathname)
-               strncpy(buff, bbcp_Config.snkSpec->pathname, plen-1);
+   if (texists && bbcp_Cfg.snkSpec->Info.Otype == 'd')
+       tdir = bbcp_Cfg.snkSpec->pathname;
+      else {int  plen;
+            if ((plen = bbcp_Cfg.snkSpec->filename-bbcp_Cfg.snkSpec->pathname))
+               strncpy(buff, bbcp_Cfg.snkSpec->pathname, plen-1);
                else {buff[0] = '.'; plen = 2;}
             tdir = buff; buff[plen-1] = '\0';
            }
 
 // Generate a target directory ID. This will also uncover a missing directory.
 //
-   fs_obj = bbcp_Config.snkSpec->FSys();
-   if (texists &&  bbcp_Config.snkSpec->Info.Otype == 'd')
-      tdir_id = bbcp_Config.snkSpec->Info.fileid;
+   if (texists &&  bbcp_Cfg.snkSpec->Info.Otype == 'd')
+      tdir_id = bbcp_Cfg.snkSpec->Info.fileid;
       else {bbcp_FileInfo Tinfo;
-            if (!fs_obj || (!(retc = fs_obj->Stat(tdir, &Tinfo))
-            && Tinfo.Otype != 'd') && outDir) retc = ENOTDIR;
+            if (!fs_obj || ((!(retc = fs_obj->Stat(tdir, &Tinfo))
+            && Tinfo.Otype != 'd') && outDir)) retc = ENOTDIR;
             if (retc) {bbcp_Fmsg("Request","Target directory",
-                                 bbcp_Config.snkSpec->pathname,"not found");
-                       return Request_exit(2);
+                                 bbcp_Cfg.snkSpec->pathname,"not found");
+                       return Request_exit(2, dRM);
                       }
             tdir_id = Tinfo.fileid;
            }
 
 // The first step is to perform an flist to get the list of files
 //
-   if ((numfiles = Request_flist(totsz)) <= 0) 
-      return Request_exit((numfiles  < 0 ? 22 : 0));
+   numfiles = Request_flist(totsz, numlinks, dotrim);
+   if (numfiles  < 0) return Request_exit(22, dRM);
+   if (numfiles == 0 && numlinks == 0 && !(bbcp_Cfg.Options &  bbcp_AUTOMKD))
+      {cout <<"200 End: 0 0" <<endl;
+       return Request_exit(0, dRM);
+      }
 
 // If we have a number files, the target had better be a directory
 //
-   if (numfiles > 1 || outDir)
+   if (numfiles > 1 || numlinks > 1 || outDir)
       {if (!texists)
           {bbcp_Fmsg("Request", "Target directory",
-                     bbcp_Config.snkSpec->pathname, "not found.");
+                     bbcp_Cfg.snkSpec->pathname, "not found.");
            return Request_exit(2);
           }
-       if (bbcp_Config.snkSpec->Info.Otype != 'd')
-          {bbcp_Fmsg("Request", "Target", bbcp_Config.snkSpec->pathname,
+       if (bbcp_Cfg.snkSpec->Info.Otype != 'd')
+          {bbcp_Fmsg("Request", "Target", bbcp_Cfg.snkSpec->pathname,
                      "is not a directory.");
            return Request_exit(20);
           }
-       bbcp_Config.Options |= bbcp_OUTDIR;
+       bbcp_Cfg.Options |= bbcp_OUTDIR;
       }
 
 // Make sure we have enough space in the filesystem
 //
-   DEBUG("Preparing to copy " <<numfiles <<" file(s); bytes=" <<totsz);
-   if (!(bbcp_Config.Options & bbcp_NOSPCHK) && !fs_obj->Enough(totsz, numfiles))
+   DEBUG("Preparing to copy " <<numlinks <<" links(s) "
+         <<numfiles <<" file(s); bytes=" <<totsz);
+   if (!(bbcp_Cfg.Options & bbcp_NOSPCHK) && !fs_obj->Enough(totsz, numfiles))
       {bbcp_Fmsg("Sink", "Insufficient space to copy all the files from",
                                Remote->NodeName());
-       return Request_exit(28);
+       return Request_exit(28, dRM);
       }
 
-// Create all of the required directories
+// Get each source file that isn't inside a directory (non-recursive copy)
 //
-   retc = 0;
-   fp = bbcp_Config.srcPath;
-   while(fp && !(retc = fp->Create_Path()))  fp = fp->next;
-   if (retc) return Request_exit(retc);
-
-// Get each source file
-//
-   fp = bbcp_Config.srcSpec;
+   fp = bbcp_Cfg.srcSpec;
    while(fp && !(retc=Request_get(fp)) && !(retc=Local->RecvFile(fp,Remote)))
-        {if (bbcp_Config.Options & bbcp_APPEND) totsz -= fp->targetsz;
+        {if (isAppend) totsz -= fp->targetsz;
          fp = fp->next;
         }
+   if (retc) return Request_exit(retc);
 
-// Now determine if we need to reset the stat info on any paths we created
+// Iterate through the copy set performing all required operations (recursive)
 //
-   if ((fp = bbcp_Config.srcPath))
-      {if (bbcp_Config.Options & bbcp_PCOPY)
-          {while(fp && fp->setStat()) fp = fp->next;}
-          else if (bbcp_Config.ModeD != bbcp_Config.ModeDC)
-                  {while(fp && fp->setMode(bbcp_Config.ModeD)) fp = fp->next;}
-      }
+   std::map<char const *, bbcp_FileSpec *, Cmp_Key>::iterator it;
+   for (it = CopySet.begin(); it != CopySet.end(); ++it)
+       {dp = it->second;
+        if ((retc = dp->Create_Path())) return Request_exit(retc);
+        fp = dp->next;
+        while(fp)
+             {if (fp->Info.Otype == 'l')
+                 {if ((retc = fp->Create_Link())) return Request_exit(retc);
+                 } else {
+                  if ((retc = Request_get(fp))
+                  ||  (retc = Local->RecvFile(fp,Remote)))
+                     return Request_exit(retc);
+                  if (isAppend) totsz -= fp->targetsz;
+                 }
+              fp = fp->next;
+             }
+        if (doPcopy) dp->setStat(bbcp_Cfg.ModeD);
+           else if (setDMode) dp->setMode(bbcp_Cfg.ModeD);
+       }
 
 // Report back how many files and bytes were received
 //
@@ -664,10 +719,14 @@ int bbcp_Protocol::Request(bbcp_Node *Node)
 /*                          R e q u e s t _ e x i t                           */
 /******************************************************************************/
   
-int bbcp_Protocol::Request_exit(int retc)
+int bbcp_Protocol::Request_exit(int retc, const char *dRM)
 {
     char buff[256];
     int blen;
+
+// Remove any auto-created directory if need bo
+//
+   if (dRM && fs_obj) fs_obj->RM(dRM);
 
 // Send the exit command (we don't care how it completes)
 //
@@ -684,26 +743,30 @@ int bbcp_Protocol::Request_exit(int retc)
 /*                         R e q u e s t _ f l i s t                          */
 /******************************************************************************/
   
-int bbcp_Protocol::Request_flist(long long &totsz)
+int bbcp_Protocol::Request_flist(long long &totsz, int &numlinks, bool dotrim)
 {
+   typedef std::pair<const char *, bbcp_FileSpec *> Pair;
+   std::map<char const *, bbcp_FileSpec *, Cmp_Key>::iterator it;
    int retc, noteol, numfiles = 0;
-   char *lp, *tfn;;
+   char *lp, *tfn, *slash;
    int   tdln = strlen(tdir);
-   bbcp_FileSpec *fp, *lastfp = 0, *lastdp = 0;
+   bbcp_FileSpec *fp;
    const char flcmd[] = "flist\n";
    const int  flcsz   = sizeof(flcmd)-1;
+   bool orphan;
 
 // Set correct target file name
 //
-   if (bbcp_Config.snkSpec->Info.Otype == 'd') tfn = 0;
-      else tfn = bbcp_Config.snkSpec->filename;
+   if (bbcp_Cfg.snkSpec->Info.Otype == 'd') tfn = 0;
+      else tfn = bbcp_Cfg.snkSpec->filename;
 
 // Send request
 //
    if (Remote->Put(flcmd, flcsz)) return -1;
 
-// Now start getting all of the files to be copied
+// Now start getting all of the objects to be recreated here
 //
+   numlinks = 0;
    while((lp = Remote->GetLine()) && (noteol = strcmp(lp, "eol")))
         {fp = new bbcp_FileSpec(fs_obj, Remote->NodeName());
          if (fp->Decode(lp)) {numfiles = -1; break;}
@@ -712,17 +775,37 @@ int bbcp_Protocol::Request_flist(long long &totsz)
                &&  (retc = fp->Xfr_Done()))
                   {delete fp; if (retc < 0) {numfiles = -1; break;}}
           else if (fp->Info.Otype == 'd')
-                    {if (lastdp) lastdp->next = fp;
-                        else bbcp_Config.srcPath = fp;
-                     lastdp = fp;
-                    }
-/*PIPE*/  else if (fp->Info.Otype == 'f' || fp->Info.Otype == 'p')
-                  {numfiles++;
-                   totsz += fp->Info.size;
-                   if (lastfp) lastfp->next = fp;
-                   else bbcp_Config.srcSpec = fp;
-                   lastfp = fp;
+                  {if (dotrim) {fp->setTrim(); dotrim = false;}
+                      else CopySet.insert(Pair(fp->pathname,fp));
                   }
+          else {dotrim = false;
+                switch(fp->Info.Otype)
+                      {case 'f': numfiles++;
+                                 totsz += fp->Info.size;
+                                 break;
+                       case 'l': numlinks++;
+                                 break;
+                       case 'p': numfiles++;
+                                 break;
+                       default:  delete fp;
+                                 continue;
+                      }
+                if (!(slash = rindex(fp->pathname, '/'))) orphan = true;
+                   else {*slash = 0;
+                         it = CopySet.find(fp->pathname);
+                         *slash = '/';
+                         if (it == CopySet.end()) orphan = true;
+                            else {bbcp_FileSpec *gp = it->second;
+                                  fp->next = gp->next;
+                                  gp->next = fp;
+                                  orphan = false;
+                                 }
+                        }
+                if (orphan)
+                   {fp->next = bbcp_Cfg.srcSpec;
+                    bbcp_Cfg.srcSpec = fp;
+                   }
+               }
         }
 
 // Flush the input queue if need be
@@ -751,7 +834,7 @@ int bbcp_Protocol::Request_get(bbcp_FileSpec *fp)
 
 // Make sure there is enough space for this file
 //
-   if (!(bbcp_Config.Options & bbcp_NOSPCHK) && !(fs_obj->Enough(fp->Info.size,1)))
+   if (!(bbcp_Cfg.Options & bbcp_NOSPCHK) && !(fs_obj->Enough(fp->Info.size,1)))
       {bbcp_Fmsg("Request_get", "Insufficient space to create file",
                        fp->targpath);
        return 28;
@@ -797,9 +880,9 @@ int bbcp_Protocol::Request_login(bbcp_Link *Net)
 
 // Prepare the login request
 //
-   blen = sprintf(buff,id,bbcp_Config.SecToken,(bbcp_Net.AutoTune() ? "+" : ""),
-                          bbcp_Config.Wsize, bbcp_Version.VData,
-                          bbcp_Config.RWBsz);
+   blen = sprintf(buff,id,bbcp_Cfg.SecToken,(bbcp_Net.AutoTune() ? "+" : ""),
+                          bbcp_Cfg.Wsize, bbcp_Version.VData,
+                          bbcp_Cfg.RWBsz);
 
 // Send the request
 //
@@ -840,7 +923,7 @@ int bbcp_Protocol::Request_login(bbcp_Link *Net)
 int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 {
    int  xWS, xAT, sWS, sAT, tWS, tAT, xBS = 0;
-   int isSRC = bbcp_Config.Options & bbcp_SRC;
+   int isSRC = bbcp_Cfg.Options & bbcp_SRC;
 
 // New version tell us if they can auto-tune via a leading plus
 //
@@ -848,13 +931,13 @@ int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 
 // Get window size in binary
 //
-   if (bbcp_Config.a2n("window size", wp, xWS, 1, -1)) return 0;
+   if (bbcp_Cfg.a2n("window size", wp, xWS, 1, -1)) return 0;
 
 // New versions also tell us the I/O buffer size as well. Older versions
 // do not give a buffer size and it was historically the window size.
 //
    if (bp && *bp)
-      {if (bbcp_Config.a2n("buffer size", bp, xBS, 1, -1)) return 0;}
+      {if (bbcp_Cfg.a2n("buffer size", bp, xBS, 1, -1)) return 0;}
       else xBS = xWS;
 
 // If this is a login response and the value is the window that must be used.
@@ -862,14 +945,14 @@ int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 //
    if (Final)
       {if (isSRC)
-          {if (xWS < bbcp_Config.Wsize)
-              {bbcp_Config.Wsize = bbcp_Net.setWindow(xWS, 1);
-               if (bbcp_Config.Options & bbcp_VERBOSE)
-                  bbcp_Config.WAMsg("Logon","Source window size reduced",xWS);
+          {if (xWS < bbcp_Cfg.Wsize)
+              {bbcp_Cfg.Wsize = bbcp_Net.setWindow(xWS, 1);
+               if (bbcp_Cfg.Options & bbcp_VERBOSE)
+                  bbcp_Cfg.WAMsg("Logon","Source window size reduced",xWS);
               }
-           if (xBS < bbcp_Config.RWBsz) bbcp_Config.setRWB(xBS);
+           if (xBS < bbcp_Cfg.RWBsz) bbcp_Cfg.setRWB(xBS);
           } else
-           if (xBS > bbcp_Config.RWBsz) bbcp_Config.setRWB(xBS);
+           if (xBS > bbcp_Cfg.RWBsz) bbcp_Cfg.setRWB(xBS);
        return 1;
       }
 
@@ -879,21 +962,21 @@ int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 // target or the traget buffer to be no smaller than the source buffer.
 //
    if (isSRC)
-      {if (xBS < bbcp_Config.RWBsz) bbcp_Config.setRWB(xBS);
-       sWS = bbcp_Config.Wsize; sAT = bbcp_Net.AutoTune();
+      {if (xBS < bbcp_Cfg.RWBsz) bbcp_Cfg.setRWB(xBS);
+       sWS = bbcp_Cfg.Wsize; sAT = bbcp_Net.AutoTune();
        tWS = xWS;               tAT = xAT;
       } else {
-       if (xBS > bbcp_Config.RWBsz) bbcp_Config.setRWB(xBS);
+       if (xBS > bbcp_Cfg.RWBsz) bbcp_Cfg.setRWB(xBS);
        sWS = xWS;               sAT = xAT;
-       tWS = bbcp_Config.Wsize; tAT = bbcp_Net.AutoTune();
+       tWS = bbcp_Cfg.Wsize; tAT = bbcp_Net.AutoTune();
       }
 
 // If source and target autotune then check if the target window >= source (warn
 // o/w) and return back what the sender would have expected to keep autotuning.
 //
    if (sAT && tAT)
-      {if (tWS < sWS && bbcp_Config.Options & bbcp_VERBOSE)
-          bbcp_Config.WAMsg("Login","Target autotuning may be misconfigured; "
+      {if (tWS < sWS && bbcp_Cfg.Options & bbcp_VERBOSE)
+          bbcp_Cfg.WAMsg("Login","Target autotuning may be misconfigured; "
                                     "max set", tWS);
        return (isSRC ? tWS : sWS);
       }
@@ -902,9 +985,9 @@ int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 //
    if (isSRC)
       {if (sWS > tWS)
-          {bbcp_Config.Wsize = bbcp_Net.setWindow(tWS, 1);
-           if (bbcp_Config.Options & bbcp_VERBOSE)
-               bbcp_Config.WAMsg("Login", "Source window size reduced", tWS);
+          {bbcp_Cfg.Wsize = bbcp_Net.setWindow(tWS, 1);
+           if (bbcp_Cfg.Options & bbcp_VERBOSE)
+               bbcp_Cfg.WAMsg("Login", "Source window size reduced", tWS);
           }
        return tWS;
       }
@@ -916,14 +999,40 @@ int bbcp_Protocol::AdjustWS(char *wp, char *bp, int Final)
 }
   
 /******************************************************************************/
+/*                             C h k 4 R e d i r                              */
+/******************************************************************************/
+
+void bbcp_Protocol::Chk4Redir(const char *oldHost, const char *newHost)
+{
+   bbcp_NetAddr oldAddr;
+   bbcp_NetAddr newAddr;
+   char buff[128];
+   int n;
+
+// Establish addresses and check if they are the same (port doesn't matter)
+//
+   oldAddr.Set(oldHost,0);
+   newAddr.Set(newHost,0);
+   if (oldAddr.Same(&newAddr)) return;
+
+// Get information to blab out
+//
+   buff[0] = '(';
+   n = newAddr.Format(buff, sizeof(buff)-8, bbcp_NetAddrInfo::fmtAddr,
+                                            bbcp_NetAddrInfo::noPort);
+   strcpy(&buff[n+1],").");
+   bbcp_Fmsg("Protocol","Host",oldHost,"redirect connection to",newHost,buff);
+}
+  
+/******************************************************************************/
 /*                                p u t C S V                                 */
 /******************************************************************************/
 
 void bbcp_Protocol::putCSV(char *Host, char *csFn, char *csVal, int csVsz)
 {                                //1234567890123
    struct iovec iov[] = {{(char *)"Checksum: ", 10},
-                        {bbcp_Config.csName,strlen(bbcp_Config.csName)},
-                        {(char *)" ", 1}, {csVal, csVsz},
+                        {bbcp_Cfg.csName,strlen(bbcp_Cfg.csName)},
+                        {(char *)" ", 1}, {csVal, static_cast<std::size_t>(csVsz)},
                         {(char *)" ", 1}, {Host, strlen(Host)},
                         {(char *)":", 1}, {csFn, strlen(csFn)},
                         {(char *)"\n",1}};
@@ -931,10 +1040,10 @@ void bbcp_Protocol::putCSV(char *Host, char *csFn, char *csVal, int csVsz)
 
 // Write the checksum to a special file if it exists
 //
-   if (bbcp_Config.csPath)
-      {if (writev(bbcp_Config.csFD, iov, n) < 0)
-          {bbcp_Emsg("Protocol",errno,"writing checksum to",bbcp_Config.csPath);
-           close(bbcp_Config.csFD); bbcp_Config.csFD = -1;
+   if (bbcp_Cfg.csPath)
+      {if (writev(bbcp_Cfg.csFD, iov, n) < 0)
+          {bbcp_Emsg("Protocol",errno,"writing checksum to",bbcp_Cfg.csPath);
+           close(bbcp_Cfg.csFD); bbcp_Cfg.csFD = -1;
           }
       } else writev(STDERR_FILENO, iov, n);
 }
@@ -951,9 +1060,9 @@ int bbcp_Protocol::SendArgs(bbcp_Node *Node, bbcp_FileSpec *fsp,
 
 // The remote program should be running at this point, setup the args
 //
-   if (bbcp_Config.CopyOpts)
-      {apnt[i]   = bbcp_Config.CopyOpts;
-       alen[i++] = strlen(bbcp_Config.CopyOpts);
+   if (bbcp_Cfg.CopyOpts)
+      {apnt[i]   = bbcp_Cfg.CopyOpts;
+       alen[i++] = strlen(bbcp_Cfg.CopyOpts);
       }
    if (addOpt) {apnt[i] = addOpt; alen[i++] = strlen(addOpt);}
    apnt[i]   = buff;

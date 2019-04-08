@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                        b b c p _ P t h r e a d . C                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -213,7 +214,7 @@ int  bbcp_Thread_Start(void *(*proc)(void *), void *arg, pthread_t *tid)
 void *bbcp_Thread_Wait(pthread_t tid)
     {long retc;
      void *tstat;
-     if (retc = pthread_join(tid, (void **)&tstat)) tstat = (void *)retc;
+     if ((retc = pthread_join(tid, (void **)&tstat))) tstat = (void *)retc;
      return tstat;
     }
 

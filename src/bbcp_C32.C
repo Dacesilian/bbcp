@@ -2,6 +2,8 @@
 /*                                                                            */
 /*                        X r d O u c C R C 3 2 . c c                         */
 /*                                                                            */
+/*(c) 2010-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -167,7 +169,13 @@ void bbcp_C32::Update(const char *p, int reclen)
 // Process each byte
 //
    TotLen += reclen;
-   while(reclen-- > 0)
-        C32Result = (C32Result<<8) 
-                  ^ crctable[(unsigned char)((C32Result>>24)^*p++)];
+   C32Result = do_crc(C32Result, p, reclen);
+}
+
+uint bbcp_C32::do_crc(uint crc, const char *p, int reclen)
+{
+   while(reclen-- > 0) {
+      crc= (crc<<8) ^ crctable[(unsigned char)((crc>>24)^*p++)];
+   }
+   return crc;
 }

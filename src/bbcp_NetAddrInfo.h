@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                    b b c p _ N e t A d d r I n f o . h                     */
 /*                                                                            */
-/*(c) 2013-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*                            All Rights Reserved                             */
+/*(c) 2013-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*                            All Rights Reserved                             */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -92,6 +93,20 @@ static const int noPortRaw = 0x0000002; //!< Use raw address format (no port)
 static const int old6Map4  = 0x0000004; //!< Use deprecated IPV6 mapped format
 
 int         Format(char *bAddr, int bLen, fmtUse fmtType=fmtAuto, int fmtOpts=0);
+
+//------------------------------------------------------------------------------
+//! Indicate whether or not a string is a possible hostname and not IP address.
+//! The return value does not aimply any kind of validity. For instance, a
+//! false return indicates this is not a valid hostname does not mean it is
+//! a valid IP address.
+//!
+//! @param name      The string to check.
+//!
+//! @return True:    This is     a possible hostname (i.e. not IP address).
+//! @return False:   This is not a possible hostname.
+//------------------------------------------------------------------------------
+
+static bool isHostName(const char *name);
 
 //------------------------------------------------------------------------------
 //! Indicate whether or not our address is the loopback address. Use this
@@ -318,7 +333,7 @@ union {struct sockaddr    *sockAddr;
 char                      *hostName;
 LocInfo                    addrLoc;
 socklen_t                  addrSize;
+int                        sockNum;
 short                      protType;
-short                      sockNum;
 };
 #endif

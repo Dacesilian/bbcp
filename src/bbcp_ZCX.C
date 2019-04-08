@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                            b b c p _ Z C X . C                             */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -142,7 +143,7 @@ int bbcp_ZCX::Process()
 
 // If we have gotten here then all went well so far flush output
 //
-   if (obp->blen = outsz - ZStream.avail_out)
+   if ((obp->blen = outsz - ZStream.avail_out))
       {obp->boff = outbytes; outbytes += obp->blen;
        Obuff->putFullBuff(obp);
        if (!(obp = Obuff->getEmptyBuff())) return ENOBUFS;

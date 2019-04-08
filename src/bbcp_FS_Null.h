@@ -4,7 +4,8 @@
 /*                                                                            */
 /*                        b b c p _ F S _ N u l l . h                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -46,6 +47,8 @@ long long  getSize(int fd, long long *bsz=0);
 bbcp_File *Open(const char *fn, int opts, int mode=0, const char *fa=0);
 
 int        MKDir(const char *path, mode_t mode) {return 0;}
+
+int        MKLnk(const char *ldata, const char *path) {return 0;}
 
 int        RM(const char *path) {return 0;}
 

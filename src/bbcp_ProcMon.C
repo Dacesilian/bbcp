@@ -2,7 +2,8 @@
 /*                                                                            */
 /*                        b b c p _ P r o c M o n . C                         */
 /*                                                                            */
-/*(c) 2002-14 by the Board of Trustees of the Leland Stanford, Jr., University*//*      All Rights Reserved. See bbcp_Version.C for complete License Terms    *//*                            All Rights Reserved                             */
+/*(c) 2002-17 by the Board of Trustees of the Leland Stanford, Jr., University*/
+/*      All Rights Reserved. See bbcp_Version.C for complete License Terms    */
 /*   Produced by Andrew Hanushevsky for Stanford University under contract    */
 /*              DE-AC02-76-SFO0515 with the Department of Energy              */
 /*                                                                            */
@@ -29,7 +30,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include "bbcp_Config.h"
 #include "bbcp_Debug.h"
 #include "bbcp_Emsg.h"
 #include "bbcp_Headers.h"
@@ -130,7 +130,7 @@ void bbcp_ProcMon::Start(pid_t monit, bbcp_Node *Remote)
 
 // Run a thread to start the monitor
 //
-   if (retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid))
+   if ((retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid)))
       {DEBUG("Error " <<retc <<" starting MonProc thread.");}
       else {DEBUG("Thread " <<mytid <<" monitoring process " <<monPID);}
    return;
@@ -152,7 +152,7 @@ void bbcp_ProcMon::Start(int seclim, bbcp_BuffPool *buffpool)
 
 // Run a thread to start the monitor
 //
-   if (retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid))
+   if ((retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid)))
       {DEBUG("Error " <<retc <<" starting buffpool monitor thread.");}
       else {DEBUG("Thread " <<mytid <<" monitoring buffpool.");}
    return;
