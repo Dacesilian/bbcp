@@ -189,7 +189,7 @@ int bbcp_Node::Run(char *user, char *host, char *prog, char *parg)
 //
    if (nodename) free(nodename);
    nodename = strdup(host ? host : bbcp_Cfg.MyHost ? bbcp_Cfg.MyHost : "");
-   username = (user ? user : bbcp_Cfg.MyUser ? bbcp_Cfg.MyUser : "");
+   username = (user ? user : bbcp_Cfg.MyUser ? bbcp_Cfg.MyUser : (char*)"");
 
 // Check for an IPV6 address as ssh does not follow the rfc standard
 //
