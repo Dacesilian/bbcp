@@ -697,7 +697,7 @@ void bbcp_Config::help(int rc)
 {
 H("Usage:   bbcp [Options] [Inspec] Outspec")
 I("Options: [-a [dir]] [-A] [-b [+]bf] [-B bsz] [-c [lvl]] [-C cfn] [-D] [-d path]")
-H("         [-e] [-E csa] [-f] [-F] [-g] [-h] [-i idfn] [-I slfn] [-k] [-K]")
+H("         [-e] [-E csa] [-f] [-F] [-g] [-h] [-H cbhost[:port]] [-i idfn] [-I slfn] [-k] [-K]")
 H("         [-L opts[@logurl]] [-l logf] [-m mode] [-n] [-N nio] [-o] [-O] [-p]")
 H("         [-P sec] [-r] [-R [args]] [-q qos] [-s snum] [-S srcxeq] [-T trgxeq]")
 H("         [-t sec] [-v] [-V] [-u loc] [-U wsz] [-w [=]wsz] [-x rate] [-y] [-z]")
@@ -720,6 +720,7 @@ H("        csa: [%]{a32|c32|md5|c32z|c32c}[=[<value> | <outfile>]]")
 H("-f      forces the copy by first unlinking the target file before copying.")
 H("-F      does not check to see if there is enough space on the target node.")
 H("-h      print help information.")
+H("-H ch:p specify callback host/port.")
 H("-i idfn is the name of the ssh identify file for source and target.")
 H("-I slfn is the name of the file that holds the list of files to be copied.")
 H("        With -I no source files need be specified on the command line.")
@@ -1551,6 +1552,7 @@ void bbcp_Config::setOpts(bbcp_Args &Args)
      Args.Option("gross",      1, 'g', 0); // deprecated and ignored
 // G is available
      Args.Option("help",       1, 'h', ':');
+     Args.Option("callback",   1, 'H', ':');
      Args.Option("idfile",     1, 'i', ':');
      Args.Option("infiles",    2, 'I', ':');
      Args.Option("ipv4",       4, '4', '.');
