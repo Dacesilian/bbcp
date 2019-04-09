@@ -5,12 +5,12 @@ Securely and quickly copy data from source to target.
 
 ### Installation
 
-Ubuntu 12.04 LTS
+Ubuntu
 
 ```sh
 apt-get update
 apt-get install libssl-dev build-essential zlib1g-dev git
-git clone https://github.com/eeertekin/bbcp.git
+git clone https://github.com/gyohng/bbcp.git
 cd bbcp/src
 make
 cp ../bin/amd64_linux/bbcp /bin/bbcp
