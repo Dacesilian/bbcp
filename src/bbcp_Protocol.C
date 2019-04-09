@@ -140,6 +140,7 @@ int bbcp_Protocol::Schedule(bbcp_Node *Fnode, bbcp_FileSpec *Ffs,
 //
         if (hDest && (noDNS || !(bbcp_Cfg.Options & bbcp_VERBOSE)))
            {cbhost = hDest; hDest = 0; fcbh = true;}
+   else if (bbcp_Cfg.CBhost) cbhost =  bbcp_Cfg.CBhost;
    else if (!(Ffs->hostname)) cbhost = bbcp_Cfg.MyAddr;
    else if (noDNS && !bbcp_NetAddrInfo::isHostName(Ffs->hostname))
            cbhost = Ffs->hostname;

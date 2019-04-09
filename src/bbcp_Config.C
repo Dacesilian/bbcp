@@ -234,7 +234,7 @@ bbcp_Config::~bbcp_Config()
 #define Cat_Oct(x) {            cbp=n2a(x,&cbp[0],"%o");}
 #define Add_Str(x) {cbp[0]=' '; strcpy(&cbp[1], x); cbp+=strlen(x)+1;}
 
-#define bbcp_VALIDOPT1 (char *)"-a.AB:b:C:c.d:DeE:fFghi:I:kKl:L:m:nN:oOp"
+#define bbcp_VALIDOPT1 (char *)"-a.AB:b:C:c.d:DeE:fFghH:i:I:kKl:L:m:nN:oOp"
 #define bbcp_VALIDOPT2         "P:q:rR.s:S:t:T:u:U:vVw:W:x:y:zZ:4.~@:$#+"
 #define bbcp_VALIDOPT3         "^<>"
 #define bbcp_VALIDOPTS bbcp_VALIDOPT1 bbcp_VALIDOPT2 bbcp_VALIDOPT3
