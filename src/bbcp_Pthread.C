@@ -195,8 +195,9 @@ int bbcp_Thread_CanType(int Async)
 int bbcp_Thread_Detach(pthread_t tid)
     {return pthread_detach(tid);}
 
-int  bbcp_Thread_Run(void *(*proc)(void *), void *arg, pthread_t *tid)
-     {int retc = bbcp_Thread_Start(proc, arg, tid);
+int  bbcp_Thread_Run(void *(*proc)(void *), const char *name, void *arg,
+                     pthread_t *tid)
+     {int retc = bbcp_Thread_Start(proc, name, arg, tid);
       if (!retc) pthread_detach(*tid);
       return retc;
      }
@@ -206,8 +207,10 @@ int bbcp_Thread_Signal(pthread_t tid, int snum)
      return pthread_kill(tid, snum);
     }
 
-int  bbcp_Thread_Start(void *(*proc)(void *), void *arg, pthread_t *tid)
+int  bbcp_Thread_Start(void *(*proc)(void *), const char *name, void *arg,
+                       pthread_t *tid)
      {int rc = pthread_create(tid, NULL, proc, arg);
+      if (!rc) pthread_setname_np(*tid, name);
       return (rc ? -rc : 0);
      }
 

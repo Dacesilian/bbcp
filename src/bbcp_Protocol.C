@@ -309,7 +309,8 @@ int bbcp_Protocol::Process(bbcp_Node *Node)
 // This avoids time-outs when large number of files are enumerated.
 //
    if (!NoGo && bbcp_Cfg.Options & bbcp_RECURSE)
-      if ((rc = bbcp_Thread_Start(bbcp_FileSpecIndex, 0, &Tid)) < 0)
+      if ((rc = bbcp_Thread_Start(bbcp_FileSpecIndex, "bbcp_FileSpecIndex", 0,
+                                  &Tid)) < 0)
          {bbcp_Emsg("Protocol", rc, "starting file enumeration thread.");
           NoGo = 1;
          }

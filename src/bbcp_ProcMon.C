@@ -130,7 +130,8 @@ void bbcp_ProcMon::Start(pid_t monit, bbcp_Node *Remote)
 
 // Run a thread to start the monitor
 //
-   if ((retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid)))
+   if ((retc = bbcp_Thread_Run(bbcp_MonProc, "bbcp_MonProc", (void *)this,
+                               &mytid)))
       {DEBUG("Error " <<retc <<" starting MonProc thread.");}
       else {DEBUG("Thread " <<mytid <<" monitoring process " <<monPID);}
    return;
@@ -152,7 +153,8 @@ void bbcp_ProcMon::Start(int seclim, bbcp_BuffPool *buffpool)
 
 // Run a thread to start the monitor
 //
-   if ((retc = bbcp_Thread_Run(bbcp_MonProc, (void *)this, &mytid)))
+   if ((retc = bbcp_Thread_Run(bbcp_MonProc, "bbcp_MonProc", (void *)this,
+                               &mytid)))
       {DEBUG("Error " <<retc <<" starting buffpool monitor thread.");}
       else {DEBUG("Thread " <<mytid <<" monitoring buffpool.");}
    return;

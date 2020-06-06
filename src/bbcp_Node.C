@@ -440,7 +440,7 @@ int bbcp_Node::RecvFile(bbcp_FileSpec *fp, bbcp_Node *Remote)
 // Start a thread for each data link we have
 //
    for (i = 0; i < dlcount; i++)
-       {if ((retc = bbcp_Thread_Start(bbcp_Net2Buff, 
+       {if ((retc = bbcp_Thread_Start(bbcp_Net2Buff, "bbcp_Net2Buff",
                                 (void *)data_link[i], &tid))<0)
            {bbcp_Emsg("RecvFile",retc,"starting net thread for",Path);
             _exit(100);
@@ -453,7 +453,8 @@ int bbcp_Node::RecvFile(bbcp_FileSpec *fp, bbcp_Node *Remote)
 //
    if (bbcp_Cfg.Options & bbcp_COMPRESS)
       {seqFile = new bbcp_File(Path, 0, 0);
-       if ((retc = bbcp_Thread_Start(bbcp_doWrite, (void *)seqFile, &tid))<0)
+       if ((retc = bbcp_Thread_Start(bbcp_doWrite, "bbcp_doWrite",
+                                     (void *)seqFile, &tid))<0)
           {bbcp_Emsg("RecvFile",retc,"starting disk thread for",Path);
            _exit(100);
           }
@@ -615,7 +616,7 @@ int bbcp_Node::SendFile(bbcp_FileSpec *fp)
 // Start a thread for each data link we have
 //
    for (i = 0; i < dlcount; i++)
-       {if ((retc = bbcp_Thread_Start(bbcp_Buff2Net, 
+       {if ((retc = bbcp_Thread_Start(bbcp_Buff2Net, "bbcp_Buff2Net",
                                 (void *)data_link[i], &tid))<0)
            {bbcp_Emsg("SendFile",retc,"starting net thread for",fp->pathname);
             _exit(100);
@@ -774,7 +775,8 @@ int bbcp_Node::Outgoing(bbcp_Protocol *protocol)
        // Start threads for data connections
        //
        for (i = 0; i < bbcp_Cfg.Streams; i++)
-           {if ((retc=bbcp_Thread_Start(bbcp_Connect,(void *)protocol,&tid))<0)
+           {if ((retc=bbcp_Thread_Start(bbcp_Connect,"bbcp_Connect",
+                                        (void *)protocol,&tid))<0)
                {bbcp_Emsg("Outgoing", retc, "starting connect thread");
                 _exit(100);
                }
@@ -897,7 +899,7 @@ bbcp_ZCX *bbcp_Node::setup_CX(int deflating, int iofd)
 
 // Start the compression/expansion thread
 //
-   if ((retc = bbcp_Thread_Start(bbcp_doCX, (void *)cxp, &tid))<0)
+   if ((retc = bbcp_Thread_Start(bbcp_doCX, "bbcp_doCX", (void *)cxp, &tid))<0)
       {bbcp_Emsg("File", retc, "starting", 
                  (char *)(deflating ? "compression" : "expansion"),
                  (char *)" thread.");

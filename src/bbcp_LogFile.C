@@ -133,7 +133,8 @@ void bbcp_LogFile::Monitor(int fdnum, char *fdname)
 
 // Start a log file thread (we loose storage upon failure)
 //
-   if ((retc = bbcp_Thread_Run(bbcp_FileLog, (void *)lrP, &(lrP->LogT))))
+   if ((retc = bbcp_Thread_Run(bbcp_FileLog, "bbcp_FileLog", (void *)lrP,
+                               &(lrP->LogT))))
       {bbcp_Emsg("LogFile", errno, "start logging thread to", Logfn);
        return;
       }

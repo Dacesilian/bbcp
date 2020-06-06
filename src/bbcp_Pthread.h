@@ -174,9 +174,11 @@ int   bbcp_Thread_Cancel(pthread_t tid);
 int   bbcp_Thread_CanType(int Async);
 int   bbcp_Thread_Detach(pthread_t tid);
 void  bbcp_Thread_MT(int mtlvl);
-int   bbcp_Thread_Run(  void *(*proc)(void *), void *arg, pthread_t *tid);
+int   bbcp_Thread_Run(  void *(*proc)(void *), const char *name, void *arg,
+                        pthread_t *tid);
 int   bbcp_Thread_Signal(pthread_t tid, int snum);
-int   bbcp_Thread_Start(void *(*proc)(void *), void *arg, pthread_t *tid);
+int   bbcp_Thread_Start(void *(*proc)(void *), const char *name, void *arg,
+                        pthread_t *tid);
 void *bbcp_Thread_Wait(pthread_t tid);
 }
 #endif

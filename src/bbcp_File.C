@@ -304,7 +304,8 @@ int bbcp_File::Read_All(bbcp_BuffPool &inPool, int Vn)
    if (bbcp_Cfg.csOpts & bbcp_csVerIn)
       {csP = new bbcp_FileChkSum(&inPool, this, bbcp_Cfg.csType,
                                  bbcp_Cfg.csOpts & bbcp_csVerIO);
-       if ((rc = bbcp_Thread_Start(bbcp_FileCSX, (void *)csP, &tid)) < 0)
+       if ((rc = bbcp_Thread_Start(bbcp_FileCSX, "bbcp_FileCSX", (void *)csP,
+                                   &tid)) < 0)
            {bbcp_Emsg("File", rc, "starting file checksum thread.");
             delete csP;
             if (rtCopy) bbcp_RTCopy.Stop();
@@ -674,7 +675,8 @@ int bbcp_File::Write_All(bbcp_BuffPool &inPool, int nstrms)
       {csP = new bbcp_FileChkSum(&inPool, this, csType,
                                  bbcp_Cfg.csOpts & bbcp_csVerIO,nstrms);
        nstrms = 1;
-       if ((rc = bbcp_Thread_Start(bbcp_FileCSY, (void *)csP, &tid)) < 0)
+       if ((rc = bbcp_Thread_Start(bbcp_FileCSY, "bbcp_FileCSY", (void *)csP,
+                                   &tid)) < 0)
            {bbcp_Emsg("File", rc, "starting file checksum thread.");
             if (csP) delete csP;
             if (IOB) IOB->Close();

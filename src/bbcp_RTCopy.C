@@ -209,7 +209,8 @@ int bbcp_RTCopy::Start(bbcp_FileSystem *fsp, const char *iofn, int iofd)
 
 // Now start a thread that will try to obtain a shared lock
 //
-   if ((rc = bbcp_Thread_Run(bbcp_RTCopyLK, (void *)&xSem, &Tid)) < 0)
+   if ((rc = bbcp_Thread_Run(bbcp_RTCopyLK, "bbcp_RTCopyLK", (void *)&xSem,
+                             &Tid)) < 0)
       {bbcp_Emsg("RTCopy", rc, "starting file r/t lock thread.");
        Grow = -rc;
        return 0;
