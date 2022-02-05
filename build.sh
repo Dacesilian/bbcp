@@ -2,6 +2,8 @@
 
 dir=$(pwd)
 
+apt-get update && apt-get install libssl-dev build-essential zlib1g-dev
+
 cd $dir/src
 make -j4
 
