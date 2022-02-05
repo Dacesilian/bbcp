@@ -5,7 +5,7 @@ Securely and quickly copy data from source to target.
 
 ### Installation
 
-Ubuntu
+Ubuntu/Debian
 
 ```sh
 apt-get update
@@ -17,6 +17,27 @@ chmod +x build.sh
 
 bbcp --version
 ```
+
+### How to use bbcp for copying ZFS snapshots
+
+```sh
+bbcp -4 c -N io -P 2 -s 10 -w 10M -T "ssh -x -a -oFallBackToRsh=no %4 %I -l %U %H -p 24 /usr/bin/bbcp" "zfs send tank/dataset@snapshot" root@remote.server.com:"zfs recv -s -Fu tank/backup/dataset"
+```
+`-P 2` prints progress each 2 seconds to console.
+
+`-s 10` sets the number of parallel network streams to be used for the transfer. The default is 4.
+
+`-w 10M` sets the preferred size of the TCP window.
+
+`-p 24` specifies remote SSH port (because it's used in `-T` parameter for target connection). If custom port is not needed, `-T` can be omitted and default SSH port will be used.
+
+Please see [bccp readme](https://www.slac.stanford.edu/~abh/bbcp/) to know what each parametr does.
+
+### More information about bbcp
+- http://pcbunn.cithep.caltech.edu/bbcp/using_bbcp.htm
+- https://www.slac.stanford.edu/~abh/bbcp/
+- https://forums.freebsd.org/threads/how-to-zfs-send-and-receive-between-two-servers-on-the-same-lan-without-ssh.67418/#post-400451
+
 
 ### Examples
 ```sh
@@ -108,5 +129,4 @@ bbcp --version
 
 
 
-
-###### Forked from http://www.slac.stanford.edu/~abh/bbcp/bbcp.git/
+###### Originally forked from http://www.slac.stanford.edu/~abh/bbcp/bbcp.git/
